@@ -1,0 +1,270 @@
+# TITAN Multi-Review Dispatch — Reviewer Registry
+#
+# 模式切换（Step 4 双模式）：
+#   MODE_A (role-based): 角色化分工 —— 适合架构/设计审阅
+#       4 审阅者各司其职：Gemini=架构, DeepSeek=实现, Qwen=对抗, ChatGPT=架构师
+#   MODE_B (code-scan): 代码扫描模式 —— 适合代码扫描/修复
+#       8-9 模型并行扫描同一文件 → 各自找问题 → 去重合并 → 优先级排序 → 逐步修复验证
+#
+# 切换方式：orchestrate.mjs --mode role|scan
+# 默认 MODE_A（角色化），兼容现有流程
+
+# 角色分工（MODE_A 固定）：
+#   Gemini / DeepSeek / Qwen   = Independent Reviewers，并行分发
+#   ChatGPT                    = Research Architect，消费 delta.md
+#
+# 交付模式（delivery mode）由 orchestrate.mjs 的 --upload 标志决定：
+#   inline（默认）— artifact 全文注入 prompt，适用于小报告（< 20K 字符）
+#   upload        — 走文件上传通道，prompt 只写短指令，适用于代码/大文件
+#
+# 每个 reviewer 的 upload 字段：
+#   upload_strategy          — "direct" | "menu_then_upload"
+#   editor_selector          — 输入框选择器（注入短 prompt 用）
+#   file_input_selector      — <input type="file"> 选择器
+#   upload_button_selector   — menu_then_upload 时，先点击的按钮（direct 时为 null）
+#   upload_menu_item_text    — menu_then_upload 时，菜单项按文本匹配
+#   upload_wait_ms           — 上传后等待毫秒数（保守值）
+
+# ============ MODE_A: 角色化审阅者（4席）===========
+reviewers_role:
+  - name: gemini
+    display_name: "Gemini"
+    url_match: "gemini\\.google\\.com"
+    url_open: "https://gemini.google.com/"
+    perspective: "架构与接口契约"
+    perspective_prompt: |
+      请从【架构与接口契约】角度审阅这段代码：模块边界是否清晰、
+      函数契约是否自洽、依赖方向是否单向、跨模块耦合是否最小、
+      抽象层级是否一致、是否存在泄漏的抽象。
+    prefix: "G"
+    # T-89（2026-10-17）：gemini.google.com 当日发送链故障（点击/Enter 零请求、
+    # 与 tab 可见性耦合的静默失败，多路取证未闭环），用户拍板当日不试。
+    # 临时停用，站点恢复后改回 true 并回归验证。
+    enabled: false
+    editor_selector: '.ql-editor[contenteditable="true"]'
+    submit_selector: 'button[aria-label="发送"]'
+    upload_strategy: "direct"
+    # T-89（2026-10-17 实证）：skip_fresh_chat:true 复用脏会话（V8 旧会话）时，
+    # 旧 model-response 在新回复到达前即满足 waitForResponse 稳定窗 → 950 字旧回复
+    # 被当成本轮结果（round-1 29c93600 gemini 假成功）。改 fresh-chat 从根上消除
+    # 陈旧捕获面；模型选择 "Gemini 自动" 为默认档，导航不损失选择。
+    skip_fresh_chat: false
+    file_input_selector: 'input[type="file"]'
+    upload_button_selector: '[aria-label="上传和工具"]'
+    upload_menu_item_text: "从设备上传"
+    upload_wait_ms: 3000
+
+  - name: deepseek
+    display_name: "DeepSeek"
+    url_match: "chat\\.deepseek\\.com"
+    url_open: "https://chat.deepseek.com/"
+    perspective: "正确性与实现细节"
+    perspective_prompt: |
+      请从【正确性与实现细节】角度审阅这段代码：逻辑分支是否覆盖、
+      边界条件是否遗漏、变量作用域/类型/生命周期是否正确、
+      异常路径是否处理、异步/并发是否安全、是否存在未声明的假设。
+    prefix: "D"
+    enabled: true
+    # T-62 补（2026-10-14 实测）：deepseek 新 UI 用 .ds-markdown 渲染消息（108 命中），
+    # model-response/.markdown 等默认选择器全部 0 —— 不配则 lastText 通道全瞎，
+    # 提前返回判 false 空转到超时天花板并触发 regen 重复发送（用户实测两遍同答）。
+    response_selector: "div.ds-markdown"
+    editor_selector: 'textarea[placeholder="Message DeepSeek"]'
+    submit_selector: '[role="button"].ds-button--circle.ds-button--primary'
+    upload_strategy: "direct"
+    file_input_selector: 'input[type="file"]'
+    upload_button_selector: null
+    upload_menu_item_text: null
+    upload_wait_ms: 3000
+    response_max_ms: 600000
+
+  - name: qwen
+    display_name: "Qwen"
+    url_match: "chat[.]qwen[.]ai"
+    url_open: "https://chat.qwen.ai/"
+    perspective: "对抗性与失效模式"
+    perspective_prompt: |
+      请从【对抗性与失效模式】角度审阅这段代码：主动构造反例、
+      寻找可被外部触发或误用的路径、压力测试隐含假设、
+      指出隐蔽的状态泄漏或资源泄漏、挑战"正常路径"以外的场景。
+    prefix: "Q"
+    # 2026-10-14 服务器宕机由 grok 顶班；2026-10-16 恢复复席实探（用户证实五席全在）：
+    # 登录✓ editor✓（textarea.message-input-textarea）/ 发送键 button.send-button（输入后出现；
+    # 空闲态该槽位为 voice-input-button——勿据此误判选择器失效）——原选择器无需改，直接复启用。
+    enabled: true
+    editor_selector: 'textarea.message-input-textarea'
+    submit_selector: 'button.send-button'
+    upload_strategy: "drag"
+    file_input_selector: 'input[type="file"]'
+    upload_button_selector: '.mode-select-open'
+    upload_menu_item_text: '上传附件'
+    upload_wait_ms: 3000
+
+  - name: grok
+    display_name: "Grok"
+    url_match: "grok\\.com|x\\.com/i/grok"
+    url_open: "https://grok.com/"
+    perspective: "对抗性与失效模式"
+    perspective_prompt: |
+      请从【对抗性与失效模式】角度审阅这段代码：主动构造反例、
+      寻找可被外部触发或误用的路径、压力测试隐含假设、
+      指出隐蔽的状态泄漏或资源泄漏、挑战"正常路径"以外的场景。
+    prefix: "K"
+    # 2026-10-14 qwen 服务器宕机换回备胎（用户指令"不等 qwen"）；实探定配：
+    # 编辑器=div.tiptap.ProseMirror（落地页 role=combobox/对话页 role=textbox——用 role 无关选择器，
+    # editor_selector 兼注入复检与拖拽兜底）；发送键=button[aria-label="Submit"]（旧 *Send 已失效）；
+    # 回复容器 assistant 专属=.message-bubble.rounded-3xl（用户气泡无 rounded-3xl，实探 4:3 交替验证）；
+    # 文件键 input[type="file"].hidden 命中 ✓。qwen 恢复后重新探测定配再切回。
+    enabled: true
+    editor_selector: 'div.tiptap.ProseMirror'
+    submit_selector: 'button[aria-label="Submit"]'
+    response_selector: '.message-bubble.rounded-3xl'
+    upload_strategy: "direct"
+    file_input_selector: 'input[type="file"].hidden'
+    upload_button_selector: null
+    upload_menu_item_text: null
+    upload_wait_ms: 3000
+
+# ============ MODE_B: 代码扫描模式（8-9 模型并行扫描）===========
+# 适用场景：代码扫描/修复 —— 8-9 模型并行扫描同一文件
+#   各自独立找问题（不分角色，各自全维度扫描）
+#   → 去重合并（按文件+行号+问题类型去重）
+#   → 优先级排序（CRITICAL > HIGH > MEDIUM > LOW）
+#   → 逐步修复验证：每条问题生成 delta → titan-execute 执行 → verify → 下一条
+#
+# 模型端点来源：FreeLLMAPI 目录（259 模型）+ Kilo 内置免费模型
+# 选 8-9 个差异化模型：覆盖不同架构/训练数据，最大化盲点覆盖
+reviewers_scan:
+  - name: nemotron-3-ultra
+    display_name: "Nemotron-3-Ultra"
+    provider: "freellmapi"
+    model_id: "nvidia/nemotron-3-ultra"
+    enabled: true
+    scan_focus: "架构与系统设计"
+    temperature: 0.1
+    max_tokens: 8192
+
+  - name: nemotron-3-ultra-550b
+    display_name: "Nemotron-3-Ultra-550B"
+    provider: "freellmapi"
+    model_id: "nvidia/nemotron-3-ultra-550b-a55b"
+    enabled: true
+    scan_focus: "复杂推理与逻辑验证"
+    temperature: 0.1
+    max_tokens: 8192
+
+  - name: deepseek-v4-pro
+    display_name: "DeepSeek-V4-Pro"
+    provider: "freellmapi"
+    model_id: "deepseek/deepseek-v4-pro"
+    enabled: true
+    scan_focus: "正确性与实现细节"
+    temperature: 0.1
+    max_tokens: 8192
+
+  - name: deepseek-v4-flash
+    display_name: "DeepSeek-V4-Flash"
+    provider: "freellmapi"
+    model_id: "deepseek/deepseek-v4-flash"
+    enabled: true
+    scan_focus: "快速扫描与边界条件"
+    temperature: 0.1
+    max_tokens: 8192
+
+  - name: gemini-3-flash-preview
+    display_name: "Gemini-3-Flash-Preview"
+    provider: "freellmapi"
+    model_id: "google/gemini-3-flash-preview"
+    enabled: true
+    scan_focus: "架构边界与接口契约"
+    temperature: 0.1
+    max_tokens: 8192
+
+  - name: claude-sonnet-5
+    display_name: "Claude-Sonnet-5"
+    provider: "freellmapi"
+    model_id: "anthropic/claude-sonnet-5"
+    enabled: true
+    scan_focus: "安全性与最佳实践"
+    temperature: 0.1
+    max_tokens: 8192
+
+  - name: nemotron-3-ultra-550b-kilo
+    display_name: "Nemotron-3-Ultra-550B (Kilo)"
+    provider: "kilo"
+    model_id: "nemotron-3-ultra-550b-a55b-bf16"
+    enabled: true
+    scan_focus: "Kilo 内置免费模型·强推理"
+    temperature: 0.1
+    max_tokens: 8192
+
+  - name: ling-3.1-flash
+    display_name: "Ling-3.1-Flash"
+    provider: "freellmapi"
+    model_id: "inclusionai/ling-3.1-flash"
+    enabled: true
+    scan_focus: "中文代码库与业务逻辑"
+    temperature: 0.1
+    max_tokens: 8192
+
+  - name: mimo-v2.6-flash
+    display_name: "MiMo-V2.6-Flash"
+    provider: "freellmapi"
+    model_id: "mimo-v2.6-flash"
+    enabled: true
+    scan_focus: "轻量快速扫描"
+    temperature: 0.1
+    max_tokens: 4096
+
+# Research Architect（下游，不是 Reviewer）——两模式共用
+architect:
+  name: chatgpt
+  display_name: "ChatGPT"
+  url_match: "chatgpt\\.com"
+  url_open: "https://chatgpt.com/"
+  role: "Research Architect"
+  consumes: "delta.md"
+  produces: "architect-decision.md"
+  editor_selector: '[contenteditable="true"].ProseMirror'
+  # T-62（2026-10-14 实探）：新 UI 为 app-shell/Workspace 结构——[data-message-author-role]
+  # 等全部 message 标记属性命中 0（连 article/.markdown 都是 0），正文在 main 容器。
+  # response_selector 前插进捕获选择器列表（注入修复后 marker 通道为主，此为第二通道）。
+  response_selector: "main"
+  # T-58（2026-10-13 实测）：ChatGPT 前端换新——#prompt-textarea 已不存在，
+  # 编辑器为 ProseMirror contenteditable；附件 hidden input 有 4 个（.hidden 类）
+  # 直传走第一枚、确认失败自动降级拖拽（drop 目标=编辑器中心）。
+  # scan 附件通道（T-40）：uploadFileToTab 强制要求 file_input_selector；
+  # 常驻 input[type=file] 找不到时会自动回落 input[type=file] 通用查找 → 拖拽模拟兜底
+  upload_strategy: "direct"
+  file_input_selector: 'input[type="file"]'
+  upload_button_selector: null
+  upload_menu_item_text: null
+  upload_wait_ms: 3000
+
+# 严重度阈值：决定哪些单方发现升级到 DELTA
+thresholds:
+  blind_spot_to_delta: "HIGH"
+  single_reviewer_to_delta: "HIGH"
+  single_reviewer_to_backlog: ["LOW", "MEDIUM"]
+
+# 已知误判过滤器：命中后写入 filtered.json + delta.md 的 Filtered Findings 段
+filters:
+  - ruleId: "FILTER-ABSOLUTE-PATH-001"
+    pattern: "absolute path|硬编码路径|绝对路径"
+    reason: "In audit context, absolute paths are evidence anchors, not defects."
+
+  - ruleId: "FILTER-RUNTIME-ID-001"
+    pattern: "transient|runtime id|PID|browserWS|ephemeral|瞬态"
+    reason: "Runtime identifiers are chain-of-custody anchors; removing them breaks verifiability."
+
+  - ruleId: "FILTER-OUT-OF-SCOPE-EVIDENCE-001"
+    pattern: "报告没有证明|outside the artifact|report does not prove"
+    reason: "Review scope is the artifact itself; out-of-scope evidence demands are not findings."
+
+  - ruleId: "FILTER-LINE-LENGTH-001"
+    pattern: "行宽|line length|单行过长"
+    reason: "Line-length is a style preference, not an audit defect."
+
+  - ruleId: "FILTER-MISSING-COMMENT-001"
+    pattern: "缺少注释|建议添加注释"
+    reason: "Comment-suggestion findings are style/code-quality preferences, not audit defects."

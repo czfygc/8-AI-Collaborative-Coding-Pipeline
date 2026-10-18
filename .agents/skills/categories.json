@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "categories": {
+    "quantitative-research": {
+      "label": "Quantitative research",
+      "terms": [
+        "quantitative",
+        "quant",
+        "research",
+        "backtest",
+        "validation",
+        "time series",
+        "point-in-time",
+        "walk-forward",
+        "trading cost",
+        "sharpe",
+        "risk",
+        "chart"
+      ],
+      "skills": [
+        "titan-quant-tool-discipline"
+      ]
+    }
+  }
+}

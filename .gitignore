@@ -1,0 +1,25 @@
+# Secret boundary — never track secret files.
+**/titan_secrets.env
+titan_secrets.env
+
+# Runtime / regenerable
+node_modules/
+*.log
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+
+# TITAN orchestrator runtime data (autopilot artifacts, gate sandbox, lock files)
+orchestrator/audit-evidence/
+orchestrator/logs/
+tmp/
+orchestrator/work-orders.json.lock
+orchestrator/*.write.lock
+orchestrator/work-orders.json.tmp
+
+# Local runtime review data (autopilot counters, review artifacts)
+reviews/
+
+# Local scratch
+_tmp_*

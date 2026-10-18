@@ -1,0 +1,113 @@
+{
+  "_comment": "Phase B 五探针产出（§13.6 步1）。草案状态，未经合同（步3）签字不生效。channel:auto 路由为运行时决策（§13.3），不是模型属性。",
+  "status": "draft",
+  "version": "0.1.0-draft",
+  "produced_by": "T-08 Phase B probes 2026-10-01",
+  "channel_auto": {
+    "decision": "runtime per-dispatch",
+    "order": ["api", "cdp"],
+    "api": {
+      "endpoint": "http://127.0.0.1:3001/v1/chat/completions",
+      "auth": "env FREELLMAPI_API_KEY（密钥不进 URL 与命令行）",
+      "probe3_result": "PASS(解析级)：HTTP 200，extractVerdictLines 行数=2>0，ISSUE-ID 可解析 5 条",
+      "model_policy": "全位置 pin 审计（Director 2026-10-02）：reviewer / 修理工 / 守门人 / 诊断 一律显式传 -m 加具体模型id，禁止 auto、禁止依赖客户端配置缺省（auto 实测会路由到 codestral-latest）。强档 pin：gemini席=gemini-3.7-flash、deepseek席=deepseek-v4-pro、第4席=claude-sonnet-5、Cline修复=claude-sonnet-5、OpenCode修复与诊断=deepseek-v4-pro、守门人=gemini-3.7-flash（必须与当单修理工不同模型）。降档备援见各席 note"
+    },
+    "output_contract": {
+      "verdict_separators_accepted": ["|", "\t"],
+      "verdict_table_required": true,
+      "verdict_literals": ["PASS", "FAIL", "CONDITIONAL"],
+      "verdict_literal_note": "2026-10-01 实测：不强制字面量时模型会输出中文判定值（合格/不合格/不适用），extractVerdictLines 解析为 0 行 → analyze 静默降级。prompt 必须显式写死“判定值只能用大写 PASS/FAIL/CONDITIONAL”，并要求‘只输出表格、不要解释文字’（gemini-3.5-flash 加此句后 0→3 行）",
+      "verified_models_20261001": ["mistral-code", "deepseek-v4-flash", "gemini-3.5-flash"],
+      "min_effective_reviewers": 2,
+      "issue_field_colon": "半角 '标题:' 与全角 '标题：' 实测都出现，extractFinding 必须两者都容",
+      "prompt_example_echo_bug": "探针③实测：模型把 prompt 里的判定表示例（安全性/性能）原样照抄 → 模板必须把示例改成占位符说明"
+    },
+    "fallback": {
+      "api_fail": "该 reviewer 降级 cdp",
+      "cdp_fail": "该 reviewer = unavailable（不阻塞整单）",
+      "both_fail": "该 reviewer 不可用；整单有效性由 min_effective_reviewers=2 判定，不足标 DEGRADED"
+    },
+    "budgets": {
+      "daily_cdp_dispatch_limit": null,
+      "_note": "数值待第 6 步调参与合同 #9 预算件确定（null=未定）；ChatGPT/Grok 走 CDP 默认 best-effort（缺席不阻塞）"
+    }
+  },
+  "rotation": {
+    "layer": "freellmapi-internal",
+    "explanation": "Token 轮替只在 Freellmapi 网关内部实现：网关持有上游 provider key 池并按可用性/限流路由（错误文案实测 '1 route checked'、'Add more API keys' 即其内部 key 池）。adapters 层与客户端层均不做轮替——我们只持单一 Bearer（env FREELLMAPI_API_KEY）。",
+    "our_layer": "none",
+    "dual_account": {
+      "status": "未配置第二账号",
+      "constraint": "两个 key 必须是不同组织才各有独立限流窗口；同组织多 key 共享同一限流窗口，轮替无效（Director 2026-10-02 指令，接入前必须先验证组织归属）",
+      "where_to_add": "Freellmapi dashboard 增加第二组织 key 后，改 env FREELLMAPI_API_KEY 为多值或网关侧配置，本层代码无需改"
+    },
+    "fallback_policy": "模型级 fallback 见各席 fallback_model：主模型 4xx/503/额度失败 → 自动降 fallback → 双挂才 unavailable；不得因单模型挂停批（上游 400/402/503 历史见维修指南 §9-12）"
+  },
+  "reviewers": [
+    {
+      "name": "gemini",
+      "role": "reviewer",
+      "api": { "available": true, "model": "gemini-3.7-flash", "fallback_model": "gemini-3.5-flash", "verified": true, "note": "pin 审计升级（Director 指令：用强档）：gemini-3.7-flash 实测 200+判定表3行合规；降级档 gemini-3.5-flash(200/3行) 作为备份；gemini-2.5-flash 404 已作废" },
+      "cdp": { "available": true, "best_effort": false },
+      "validator_watch": { "unique_findings_last_round": 0, "rule": "连续2轮0独有→降级验证者席（不计≥2家独立下限），连续3轮→换模型（裁决3）" }
+    },
+    {
+      "name": "deepseek",
+      "role": "reviewer",
+      "api": { "availability": "DEGRADED", "model": "deepseek-v4-pro", "served_by_current": "codestral", "fallback_model": "deepseek-v4-flash", "verified": true, "degraded_note": "裁决2：v4-pro 上游 503（网关缺不同组织 key），⑦ 首批由 codestral 顶班=在场但降级；门禁不放宽；Director 补 key 后立即复算替换，顶班 4 条独有全配置级→长期顶班视为降级", "note": "pin 审计升级强档：deepseek-v4-pro 实测 200 served=deepseek-v4-pro-0813 判定表4行合规；降级档 deepseek-v4-flash(200/2行)；deepseek-chat 503 作废" },
+      "cdp": { "available": true, "best_effort": false }
+    },
+    {
+      "name": "grok",
+      "role": "reviewer",
+      "api": { "available": false, "reason": "freellmapi 配置实测含 groq 不含 grok（§13.0 坐实）" },
+      "cdp": { "available": true, "best_effort": true, "note": "CDP 配额坑，缺席不阻塞" },
+      "fallback_model": null
+    },
+    {
+      "name": "reviewer4",
+      "role": "reviewer",
+      "api": { "available": true, "model": "claude-sonnet-5", "fallback_model": "mistral-code", "verified": true, "note": "G15(a) 第4席，pin 审计升强档：claude-sonnet-5 实测 200+判定表4行合规。落选记录：claude-opus-4-5 404 不在目录、mistral-large-3 404 disabled、gpt-6-luna/qwen3.8-27b 429 冷却20h、kimi-k3/minimax-m3 503 无 key、mercury-2.5 200 但 0 行不合规。降级档 mistral-code(200/2行)" },
+      "cdp": { "available": false, "reason": "无对应网页审阅席位" }
+    },
+    {
+      "name": "chatgpt",
+      "role": "architect",
+      "api": { "available": false },
+      "cdp": { "available": true, "best_effort": true, "note": "G15：architect 专席，不兼任 reviewer" },
+      "fallback_model": null
+    }
+  ],
+  "clients": {
+    "opencode": {
+      "role": "debugger",
+      "headless_entry": "opencode run [--format json] -m <provider>/<model>",
+      "pin": { "primary": "freellmapi/deepseek-v4-pro", "fallback": "freellmapi/claude-sonnet-5", "note": "调用必须显式 -m；主挂(fail/超时/额度)自动降 fallback，双挂才 unavailable（红线：不因单模型挂停批）" },
+      "probe1_verdict": "USABLE_WITH_CONDITIONS",
+      "probe4_verdict": "VERIFIED（第3轮首跑）：--format json NDJSON 7/7 可解析，结论 {\"branch\": \"REJECTED_DEFINITION\", \"evidence\": \"src/app.js:2\", \"reason\": \"delta 与代码不符\"}，只读未改动（repo4 git status 干净）",
+      "conditions": [
+        "平台二进制必须显式安装 opencode-windows-x64（opencode-ai 的 postinstall 自动解析在本机失败）",
+        "prompt 必须显式禁止 git push（沙箱无 remote 时它会 push 失败后不退出）",
+        "外层必须 timeout 包装 + 进程清理（run 完成后 opencode.exe 常驻不退出）",
+        "FREELLMAPI_API_KEY 必须注入进程环境（配置里是 {env:...}）",
+        "pin 审计（Director 2026-10-02）：调用必须显式 -m freellmapi/deepseek-v4-pro（禁 auto；全局 opencode.json 的 model=freellmapi/auto 只是缺省，禁止依赖）"
+      ]
+    },
+    "cline": {
+      "role": "gatekeeper",
+      "headless_entry": "cline \"<prompt>\" --json --auto-approve <bool> -P openai -c <cwd> --data-dir <dir> -t <sec>",
+      "pin": { "fixer_primary": "claude-sonnet-5", "fixer_fallback": "gemini-3.7-flash", "gate_primary": "gemini-3.7-flash", "gate_fallback": "mistral-code", "note": "每条命令行显式 -m；同单守门人模型必须不同于修理工模型（G11 两级独立性）；主挂自动降 fallback" },
+      "probe2_verdict": "PASS",
+      "probe5_verdict": "PASS(read-only)，auto-approve=false 时连只读操作也会停下来请示 → 守门人运行用 auto-approve=true + 指令约束 + 事后 diff 指纹校验",
+      "conditions": [
+        "auth 一次性非交互：cline auth -p openai -k <key> -m claude-sonnet-5 -b http://127.0.0.1:3001/v1 --data-dir <dir>（pin 审计：auth 的 -m 也必须具体id，禁 auto）；每次运行仍须在命令行显式传 -m 加具体模型id",
+        "输出为 NDJSON（含少量 stderr 混入行，解析需逐行 try）"
+      ]
+    }
+  },
+  "known_gaps": [
+    "G6: --analyze 强制要求 issues-normalized.json（orchestrate.mjs L2764），而该文件只在 --review 路径写出（L2119）→ API 通道需新增 --normalize <dispatchId> 子命令（合同裁定选项 a）",
+    "G8: 新 dispatch 无 golden → 需 golden bootstrap 程序（首个人工过目后钉期望值）",
+    "探针③: 判定表示例回声 → prompt 模板改占位符（合同输出物 #6 验证者 prompt 模板内落地）"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "contract": "orchestrator/autopilot-contract-v1.md#1",
+  "source": "orchestrator/汇总.md（示例版，只读导入，M7 不改）",
+  "base_commit": null,
+  "generated_at": null,
+  "stats": {
+    "total": 0,
+    "ready": 0,
+    "needs_enrichment": 0,
+    "byResolveReason": {}
+  },
+  "orders": []
+}

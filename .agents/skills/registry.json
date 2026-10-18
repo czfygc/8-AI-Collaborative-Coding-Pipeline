@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "maxMatches": 3,
+  "maxFullPayloads": 3,
+  "skills": [
+    {
+      "name": "titan-quant-tool-discipline",
+      "category": "quantitative-research",
+      "description": "TITAN quantitative research tool-selection discipline: use the dedicated specialist tool first, preserve UNKNOWN, and distinguish fallback limitations.",
+      "triggers": [
+        "titan quant tool discipline",
+        "quant tool discipline",
+        "quantitative research tool selection",
+        "quantitative tool discipline"
+      ],
+      "keywords": [
+        "quantitative research",
+        "quant",
+        "research",
+        "backtest",
+        "validation",
+        "tool selection",
+        "point-in-time",
+        "walk-forward",
+        "trading costs",
+        "deflated sharpe",
+        "parameter sensitivity",
+        "structured chart"
+      ],
+      "alwaysAttach": true,
+      "payload": "SKILL.md"
+    }
+  ]
+}

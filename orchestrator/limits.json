@@ -1,0 +1,41 @@
+{
+  "_comment": "⑦ 扩容每日上限 —— 硬编码入库。任何修改必须改本文件并提交，与合同修订同批评审。CDP 与 API 通道分开记账。",
+  "version": "1.0.0",
+  "effective_from": "2026-10-02",
+  "daily": {
+    "dispatch_cdp": 10,
+    "dispatch_api": 4,
+    "dispatch_total": 14,
+    "fixer_tasks_per_client": 4,
+    "gatekeeper_runs": 6
+  },
+  "per_order": {
+    "token_budget": 120000,
+    "cycle_baseline_minutes": { "simple": 5, "medium": 30, "analyzer": 15 }
+  },
+  "hard_stops": {
+    "artifact_log_bytes": 52428800,
+    "disk_free_mb_min": 1024
+  },
+  "fixer_scheduler": {
+    "_comment": "先串行跑通机制，补 key 后把 max_concurrent_fixers 改 2 且两修理工用不同模型（不互抢 mistral-code）。",
+    "max_concurrent_fixers": 2,
+    "flip_note": "席位/模型切换记录占位符：按实际测试结果填写；修理工模型不进 reviewer 独立性判定；两槽 fallback 链刻意错开，避免并发时互抢同一模型。",
+    "slots": {
+      "fixerA": { "client": "cline", "pin": "claude-sonnet-5", "fallbacks": ["mistral-code"], "flag": "-P openai -m", "chain_note": "gemini 502/429 震荡期移出修理工链（保留给 reviewer 席）；A 末档=mistral-code" },
+      "fixerB": { "client": "opencode", "pin": "deepseek-v4-pro", "fallbacks": ["claude-sonnet-5", "codestral"], "flag": "-m freellmapi/" }
+    },
+    "note": "修理工模型不进 reviewer 独立性判定；两槽 fallback 链刻意错开：A 末档 mistral-code、B 末档 codestral，避免并发时互抢同一模型",
+    "refix_limit_per_order": 2,
+    "attempt_timeout_ms": 600000,
+    "clone_root": "%TEMP%\\titan-fix",
+    "run_flags": { "cline": "--auto-approve true", "opencode": "--pure --auto --format json" }
+  },
+  "accounting": {
+    "grain": "per-calendar-day",
+    "file": "reviews/_autopilot/counters/<YYYY-MM-DD>.json",
+    "channels": ["cdp", "api"],
+    "writer": "autopilot（唯一写者）",
+    "enforcement": "超限即 exit 2 blocked，不可临时豁免；解禁=改本文件并提交"
+  }
+}
