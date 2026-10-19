@@ -84,10 +84,29 @@ tmp/ofm-cline-datadir/
 tmp/ofm-m4-clinedir/
 tmp/ofm-anyrouter/hdr.txt
 
-# 禁推清单（publish-sync prune，T-126）：内部台账/实例数据/运维 SOP 永不外发
+# >>> publish-sync 禁推清单（工具自动维护，勿手改）
 ISSUE_REGISTRY.json
-PUBLISH_MANIFEST.json
-orchestrator/p2-fixes.md
+PUBLISH_SYNC.json
 orchestrator/work-orders.json
-orchestrator/汇总.md
+orchestrator/汇总*.md
+orchestrator/p2-fixes.md
+orchestrator/audit-evidence/
+orchestrator/分阶段拆分计划.md
+orchestrator/计划-收口修复-*
 titan-memory/core/CORE.md
+.agents/skills/titan-publish-sync/
+*.log
+reviews/
+archive/
+tmp/
+design-specs/
+evidence/
+bin/
+HARNESS/
+cfnext/
+freellmapi-src/
+chrome-cdp-profile/
+cline-local/
+test-projects/
+V8_HEADLESS/
+# <<< publish-sync 禁推清单

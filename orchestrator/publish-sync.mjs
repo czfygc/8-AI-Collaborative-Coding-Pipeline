@@ -41,6 +41,37 @@ function resolveTree(opts, ledger) {
   return (opts && opts.tree) || (ledger && ledger.publishTree) || process.env.PUBLISH_TREE || '';
 }
 
+// 发布树 .gitignore 受管块：每次 apply 重建（复制会覆盖 .gitignore，条目必须每次补回）
+const DENY_BEGIN = '# >>> publish-sync 禁推清单（工具自动维护，勿手改）';
+const DENY_END = '# <<< publish-sync 禁推清单';
+const DENY_IGNORE_ENTRIES = [
+  'ISSUE_REGISTRY.json',
+  'PUBLISH_SYNC.json',
+  'orchestrator/work-orders.json',
+  'orchestrator/汇总*.md',
+  'orchestrator/p2-fixes.md',
+  'orchestrator/audit-evidence/',
+  'orchestrator/分阶段拆分计划.md',
+  'orchestrator/计划-收口修复-*',
+  'titan-memory/core/CORE.md',
+  '.agents/skills/titan-publish-sync/',
+  '*.log',
+  'reviews/', 'archive/', 'tmp/', 'design-specs/', 'evidence/',
+  'bin/', 'HARNESS/', 'cfnext/', 'freellmapi-src/', 'chrome-cdp-profile/',
+  'cline-local/', 'test-projects/', 'V8_HEADLESS/'
+];
+
+function ensureDenyIgnore(pubDir) {
+  const giPath = join(pubDir, '.gitignore');
+  let gi = existsSync(giPath) ? readFileSync(giPath, 'utf8') : '';
+  const re = new RegExp('\\n?' + DENY_BEGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[\\s\\S]*?' + DENY_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\n?', 'g');
+  gi = gi.replace(re, '\n');
+  if (gi && !gi.endsWith('\n')) gi += '\n';
+  gi += '\n' + DENY_BEGIN + '\n' + DENY_IGNORE_ENTRIES.join('\n') + '\n' + DENY_END + '\n';
+  writeFileSync(giPath, gi, 'utf8');
+  return DENY_IGNORE_ENTRIES.length;
+}
+
 // 禁推清单（T-126 用户政策：发布集 = V2 流水线完整逻辑链（脱敏后）；其余禁推）：
 //   ①内部台账/队列/审计基线（ISSUE_REGISTRY.json 类，用户点名永不推 GitHub）
 //   ②内部运维 SOP 与实例数据（非逻辑链）
@@ -55,7 +86,7 @@ const NEVER_PUBLISH = [
   /^orchestrator\/计划-收口修复-/,
   /^titan-memory\/core\/CORE\.md$/,            // 实例记忆（非逻辑链；公开仓应各自生成）
   /^\.agents\/skills\/titan-publish-sync\//,   // 本技能自身（内部运维 SOP，含本地路径与政策）
-  /^(PUBLISH_SYNC|PUBLISH_MANIFEST)\.json$/,   // 两侧标记由工具管理，不作为发布内容流转
+  /^(PUBLISH_SYNC)\.json$/,                    // 本地账本（含本地发布树路径，不入公开仓）；发布侧清单 PUBLISH_MANIFEST.json 相反，必须发布
   /\.log$/i,
   /(^|\/)(reviews|archive|tmp|design-specs|evidence|bin|HARNESS|cfnext|freellmapi-src|chrome-cdp-profile|cline-local|test-projects|V8_HEADLESS)\//
 ];
@@ -433,6 +464,9 @@ function cmdApply(opts) {
       console.log('  [忽略] 发布树 .gitignore 已登记 ' + missing.length + ' 条禁推');
     }
   }
+  // 无论本次是否剔除，都重建受管块：复制会覆盖 .gitignore，禁推条目必须每次补回（否则 git add -A 重新加回）
+  const denyCount = ensureDenyIgnore(pubDir);
+  console.log('  [忽略] 发布树 .gitignore 受管块已刷新（' + denyCount + ' 条禁推规则）');
   for (const f of deniedExplicit) console.log('  [拒收] ' + f + ' — 禁推清单拒绝 --include');
   for (const b of blocked) console.log('  [拦截] ' + b);
   for (const f of failed) console.log('  [失败] ' + f);
