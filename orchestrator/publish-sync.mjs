@@ -62,13 +62,16 @@ const DENY_IGNORE_ENTRIES = [
 ];
 
 function ensureDenyIgnore(pubDir) {
-  const giPath = join(pubDir, '.gitignore');
-  let gi = existsSync(giPath) ? readFileSync(giPath, 'utf8') : '';
+  // 写 .git/info/exclude（本克隆生效、不入库）：.gitignore 会随同步被本地版覆盖，且写成受管块会让
+  // .gitignore 永远与本地版不一致（每次 apply 都误报改动）。exclude 没有这两个问题。
+  const exPath = join(pubDir, '.git', 'info', 'exclude');
+  mkdirSync(dirname(exPath), { recursive: true });
+  let gi = existsSync(exPath) ? readFileSync(exPath, 'utf8') : '';
   const re = new RegExp('\\n?' + DENY_BEGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[\\s\\S]*?' + DENY_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\n?', 'g');
   gi = gi.replace(re, '\n');
   if (gi && !gi.endsWith('\n')) gi += '\n';
   gi += '\n' + DENY_BEGIN + '\n' + DENY_IGNORE_ENTRIES.join('\n') + '\n' + DENY_END + '\n';
-  writeFileSync(giPath, gi, 'utf8');
+  writeFileSync(exPath, gi, 'utf8');
   return DENY_IGNORE_ENTRIES.length;
 }
 
