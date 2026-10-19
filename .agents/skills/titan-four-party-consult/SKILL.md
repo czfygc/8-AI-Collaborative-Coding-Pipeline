@@ -230,22 +230,22 @@ Future auditors must be able to answer: "where did G-04 go?"
 
 ### SOP gate（派单前必过闸 — T-03 挂载）
 
-> 详版坑库/验收报告模板：`D:\TITAN_ARCHAEOLOGY\.agents\skills\titan-four-party-consult\四方会诊_SOP.md`（canonical，与本文件同目录）。
+> 详版坑库/验收报告模板：`四方会诊_SOP.md`（canonical，与本文件同目录）。
 > 本节是随技能注入的执行核心，与该文件**双向同步**：改任何一边必须同步另一边并提交。
 
 **前置检查（全过才准派单；任一不过 = 先修环境，不派单）：**
 
 1. CDP 可达：`http://127.0.0.1:9222/json/version` → 200。
-2. Chrome 带持久 profile：`--user-data-dir=D:\TITAN_ARCHAEOLOGY\chrome-cdp-profile`（登录/验证态跨重启保留）。
+2. Chrome 带持久 profile：`--user-data-dir=<profile-dir>`（登录/验证态跨重启保留）。
 3. `/json/list` 中 Gemini / DeepSeek / Qwen 三个 `type=page` tab 全部在线且已登录（席位名单以 reviewers.yaml enabled:true 为准）。
-4. ChatGPT tab **非挑战页**（title ≠ "Just a moment..."、url 无 `__cf_chl_`）；存疑先跑 `D:\TITAN_ARCHAEOLOGY\.agents\skills\titan-four-party-consult\tools\_probe_chatgpt.mjs`。
+4. ChatGPT tab **非挑战页**（title ≠ "Just a moment..."、url 无 `__cf_chl_`）；存疑先跑 `tools/_probe_chatgpt.mjs`。
 5. `reviewers.yaml` thresholds 未漂移（`blind_spot_to_delta`/`single_reviewer_to_delta` = HIGH）。
 6. 改过代码 → 先跑回归：`--analyze 66c0f00e` + `_fixture_stest2`，断言须与 `_session_memory.md` 第 2 节完全一致。
 7. 轻量冒烟（推荐）：`--analyze _fixture_stest2` 秒级验证分析链，不消耗任何外部配额。
 
 **标准链式命令（一次跑完 dispatch → analyze → architect，不拆段执行）：**
 
-    cd D:\TITAN_ARCHAEOLOGY\orchestrator
+    cd <workspace>\orchestrator
     node orchestrate.mjs --review <artifact-path> --analyze --architect
 
 **执行红线（违反即停止并回滚，详见 Forbidden）：**
@@ -253,13 +253,13 @@ Future auditors must be able to answer: "where did G-04 go?"
 - 任一 reviewer `textLen=0` → 本次判失败，**禁止**进入 analyze/architect，先修捕获层（常见根因：Node 函数泄漏进浏览器模板 → `ReferenceError: markerEnd`）。
 - delta 无 `DELTA-###` → 走本地短路，**严禁**空/占位 delta 发 CDP 或灌 ChatGPT。
 - **严禁**重复向 ChatGPT 灌相同测试 prompt（配额是资源；冒烟用 fixture，正式验收只跑一次）。
-- fresh-chat 撞挑战页 → 先 `D:\TITAN_ARCHAEOLOGY\.agents\skills\titan-four-party-consult\tools\_try_turnstile.mjs` 清一次；未清不准原样重试。
+- fresh-chat 撞挑战页 → 先 `tools/_try_turnstile.mjs` 清一次；未清不准原样重试。
 - artifact 中途变更（sha 漂移）→ `DISPATCH_ABORTED`；修复后以**新 sha 重派**，不复用旧 dispatch。
 
 ### Pre-dispatch
 
 1. Confirm CDP endpoint reachable: `http://127.0.0.1:9222/json/version`.
-2. If unreachable: do NOT auto-start Chrome. Instruct user to run `D:\TITAN_ARCHAEOLOGY\orchestrator\启动 CDP 浏览器.bat` (persistent profile keeps login/verification state).
+2. If unreachable: do NOT auto-start Chrome. Instruct user to run `orchestrator/启动 CDP 浏览器.bat` (persistent profile keeps login/verification state).
 3. Compute artifact SHA256. Check `dispatch-history.log`. If same SHA256 already dispatched, warn and require explicit override.
 4. Load `reviewers.yaml`. Confirm all enabled reviewer tabs are open and logged in.
 5. Record artifactSha256 before dispatch. If it changes during dispatch → `DISPATCH_ABORTED`.
@@ -268,12 +268,12 @@ Future auditors must be able to answer: "where did G-04 go?"
 
 Invoke orchestrator with fixed interface:
 
-    node D:\TITAN_ARCHAEOLOGY\orchestrator\orchestrate.mjs --review <artifact-path> \
+    node orchestrator/orchestrate.mjs --review <artifact-path> \
       [--round <N>] [--parent <dispatchId>] [--trigger <TRIGGER>]
 
 Orchestrator writes to:
 
-    D:\TITAN_ARCHAEOLOGY\reviews\<dispatchId>\
+    <workspace>\reviews\<dispatchId>\
       layer-a\
         raw\<reviewer>.md              (verbatim, SHA256-stamped)
         screenshots\<reviewer>.png
@@ -331,7 +331,7 @@ After `architect-decision.md` is written: stop. Do not generate supplementary re
 - Asking user to manually open Chrome / tabs / run commands when CDP is up.
 - Letting reviewer A's prompt contain reviewer B's response.
 - Modifying P0 / P1-A / RD.
-- Stopping `E:\TITAN_RESEARCH`.
+- Stopping a research drive.
 - Mass-migrating historical files during first deployment.
 - Dispatching while any SOP gate pre-check fails (challenge page up, regression broken, reviewer tab logged out).
 - Continuing into analyze/architect after `textLen=0` (silently absorbing capture failure).
@@ -373,7 +373,7 @@ Analysis:
 ### STEP A — Infrastructure only
 
 Change:
-- `orchestrate.mjs` → `D:\TITAN_ARCHAEOLOGY\orchestrator\orchestrate.mjs`
+- `orchestrate.mjs` → `orchestrator/orchestrate.mjs`
 - add `orchestrator\reviewers.yaml`
 - add `reviews\`, `reports\`, `orchestrator\logs\`
 - implement `dispatch-meta.json` with lineage

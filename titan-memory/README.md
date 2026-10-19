@@ -67,7 +67,7 @@ Harness 继续用它自己的八个工具（含 `memory_edit` / `memory_forget` 
 ## 验证
 
 ```powershell
-cd D:\TITAN_ARCHAEOLOGY
+cd <workspace>
 node titan-memory\test.mjs          # 46/46：协议协商、往返、DSH schema、core memory、错误路径、清理不留痕
 node titan-memory\verify-cline.mjs  # 14/14：Cline 接线回归
 node titan-memory\cli.mjs recall '{"query":"10810","limit":5}'

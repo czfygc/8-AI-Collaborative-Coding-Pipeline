@@ -29,9 +29,9 @@ export function memoryFile() {
 }
 
 /** Canonical workspace-path form. The fact table joins on an EXACT string
- *  match, DSH writes the native spelling (`D:\TITAN_ARCHAEOLOGY`), while the
- *  MCP configs spell it `D:/TITAN_ARCHAEOLOGY`. Without normalising, a
- *  forward-slash TITAN_WORKSPACE silently returns zero active facts — this
+ *  match, DSH writes the native spelling (`<native-path>`), while the
+ *  MCP configs spell it `<forward-slash-path>`. Without normalising, a
+ *  forward-slash workspace path silently returns zero active facts — this
  *  bug shipped in the first wiring and was caught by the Cline cross-check. */
 export function normalizeWorkspacePath(input) {
 	let value = String(input ?? '').trim();

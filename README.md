@@ -12,6 +12,8 @@ Alpha, not production-grade — but the whole loop is real, runnable, and audita
 
 ## How it works — 9 seats, 3 stages
 
+> "8-AI" counts the 8 AI that actively work per cycle: 4 web reviewers + 4 local coding clients. The 9th seat is a web-AI hot spare — it absorbs UI churn so the review quorum never shrinks, but it does not participate in every review.
+
 ```
  Stage 1 · Design & decomposition        Stage 2 · Implementation        Stage 3 · Review gate
 ┌─────────────────────────────┐    ┌──────────────────────────────┐    ┌──────────────────────────┐
@@ -43,7 +45,7 @@ Alpha, not production-grade — but the whole loop is real, runnable, and audita
 | `orchestrator/lib/` | Responsibility modules (`scan-entry.mjs`, `analyze-core.mjs`, `architect.mjs`, `reviewers.mjs`, …) |
 | `orchestrator/test/` | 21 gate test cases |
 | `titan-memory/` | Cross-client shared memory MCP server (zero-dependency) |
-| `.agents/` | Skills shared by the four local clients |
+| `.agents/` | Review protocol skills (four-party consult, review channels) |
 | `AGENTS.md` | Four-client collaboration contract (auto-loaded, self-contained) |
 
 **Not included in this repository** (local configs and deployment artifacts — part of the runtime environment, not the release):
@@ -51,15 +53,19 @@ Alpha, not production-grade — but the whole loop is real, runnable, and audita
 - `freellmapi-src/` — FreeLLMAPI local gateway (<https://github.com/neclomin/freellmapi>)
 
 
-## Environment setup (required before Quick Start)
+## Environment setup
 
 ```powershell
 # 0. Prerequisites: Node.js (>=18) and npm
 
 # 1. Install pipeline dependencies (playwright-core, @playwright/mcp, js-yaml)
 npm install
+```
 
-# 2. Prepare a CDP browser (NOT included in this repo)
+Only `npm install` is required for the checks below. A CDP browser is **only** needed when you run the web-AI review flow (the web seats in Stage 1 / Stage 3):
+
+```powershell
+# 2. Optional — only for the web-AI review flow
 #    Launch Chrome/Edge with remote debugging on port 9222:
 #    chrome.exe --remote-debugging-port=9222 --user-data-dir="<local-dir>"
 #    The user-data-dir (chrome-cdp-profile) is local runtime data and is NOT in this repo.
@@ -78,7 +84,7 @@ node orchestrator/verify-gate.mjs
 node --test orchestrator/test/
 ```
 
-Expected: `verify-gate.mjs` exits with code `0`, `[GATE] RESULT: OK`. The gate requires the CDP browser from step 2 of Environment Setup to be reachable at `127.0.0.1:9222`.
+Expected: `verify-gate.mjs` exits with code `0`, `[GATE] RESULT: OK`. All base checks (syntax, import, CLI, test, self-check, size) run **without any browser** — the CDP browser is only needed for the web-AI review flow (`--review` / `--scan` web seats).
 
 ## Status (Alpha / not production-grade)
 
@@ -102,7 +108,7 @@ Expected: `verify-gate.mjs` exits with code `0`, `[GATE] RESULT: OK`. The gate r
 | sing-box | Proxy and routing | <https://github.com/SagerNet/sing-box> |
 | OpenClaw | Human-computer language interaction (mobile: Telegram, WhatsApp, …) | <https://github.com/openclaw/openclaw> |
 
-`orchestrator/` interacts with the integrated tools (FreeLLMAPI, sing-box) via standard HTTP/gRPC interfaces. OpenClaw (human-computer language interaction) is not integrated yet, which does not prevent claiming the capability up front: it is the **mobile entry point** — OpenClaw is an open-source personal AI assistant that runs on your own device and meets you in the channels you already use (Telegram, WhatsApp, Discord, iMessage, … 20+ channels plus native mobile apps), so you can drive the pipeline from your phone in a TG conversation. Concrete configs stay local.
+`orchestrator/` interacts with the integrated tools (FreeLLMAPI, sing-box) via standard HTTP/gRPC interfaces. OpenClaw is an external open-source project for human-computer language interaction — **on the roadmap, not yet integrated** in this release. When integrated, it will be the **mobile entry point**: OpenClaw is a personal AI assistant that runs on your own device and meets you in the channels you already use (Telegram, WhatsApp, Discord, iMessage, … 20+ channels plus native mobile apps), so you can drive the pipeline from your phone in a TG conversation. Concrete configs stay local.
 
 ## Contributing
 

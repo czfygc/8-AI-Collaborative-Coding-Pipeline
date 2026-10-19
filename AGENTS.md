@@ -1,14 +1,14 @@
 # TITAN_ARCHAEOLOGY 多客户端协作规则（必加载，自包含）
 
 > 本文件 `AGENTS.md` 被四客户端（deepseek Harness、OpenCode、Cline、Kilo Code）**每会话自动加载**。
-> **自包含声明：遵守本文件全文即合规。** `SHARED_GIT_WORKSPACE_GUIDE.md` 是原理与示例参考层，任务台账（内部状态层，不随本仓库发布）——两者被本文件"挂载"（见 M0），而不是"不读就违规"的前置条件。
+> **自包含声明：遵守本文件全文即合规。** 共享指南是原理与示例参考层，任务台账（内部状态层，不随本仓库发布）——两者被本文件"挂载"（见 M0），而不是"不读就违规"的前置条件。
 > 修订本文件 = 修宪，必须提交。
 
-**工作区**：`D:\TITAN_ARCHAEOLOGY` ｜ **分支**：`main` ｜ **仓库**：四客户端共用同一个 `.git`
+**工作区**：各客户端共享的同一工作区目录 ｜ **分支**：`main` ｜ **仓库**：四客户端共用同一个 `.git`
 
 ## M0 挂载机制（后两层如何被强制，不成孤立文件）
 
-- **规范层（共享指南）**：OpenCode 经 `opencode.json` 全量自动加载；Cline/harness 以**本文件内联的完整程序（M1–M7）**为准，指南仅作"为什么+示例"的参考。——本文件自包含之后，不读指南也不影响合规。
+- **规范层（共享指南）**：各客户端经自身配置文件全量自动加载；Cline/harness 以**本文件内联的完整程序（M1–M7）**为准，指南仅作"为什么+示例"的参考。——本文件自包含之后，不读指南也不影响合规。
 - **状态层（台账）**：运行时状态文件不做静态全量加载（会无限膨胀）；挂载方式是**行为强制**：M1 规定任何改动开工前必须读台账并认领。未认领动工、撞单改同一文件，以提交历史为证，事后可审计。
 - **兜底**：M4 开工自检 + 台账提交历史。跳过者会被发现。
 
@@ -39,7 +39,7 @@
 - **修的人不许自己验收。**
 - 重要改动必须由第二个客户端验证：回归命令 + 输出作为证据提交，并在台账填 `verifier` 与证据位置。
 - 分歧以验证输出为准，不靠辩论。
-- **（2026-10-11 用户授权）作者客户端可自行后台调用另一客户端完成交叉验证，无需请示用户**：默认 verifier=Kilo（headless 调用方法与红线见技能 `titan-headless-clients`，验证输出落盘为证据）。verifier 仍必须是非作者客户端——**驱动可以是自己，判定必须出自对方**。
+- **（2026-10-11 用户授权）作者客户端可自行后台调用另一客户端完成交叉验证，无需请示用户**：默认 verifier=Kilo（headless 调用方法与红线见内部技能文档，验证输出落盘为证据）。verifier 仍必须是非作者客户端——**驱动可以是自己，判定必须出自对方**。
 
 **根目录纪律**：
 - 根目录只放四客户端共同检索/遵守的单个文件；判定口诀："只属于某个子项目吗？"→进子目录；"四客户端跨项目都要读吗？"→可留根。
@@ -72,7 +72,7 @@
 - **工具**：`orchestrator/safe-write.mjs`（`--target <path> --b64 <base64文件> [--expect-sha256 <hex>] [--check]`）已内置；自检第 7 项的验证闸门 = `orchestrator/verify-gate.mjs`。
 
 **轻量通道（免台账）**：
-- **判定**（同时满足全部）：单文件改动、改动 < 50 行、文件不在门禁白名单（verify-baseline*.mjs / _session_memory.md §2 / AGENTS.md）、不碰 orchestrate.mjs 核心函数（runAnalyze / runArchitect / main / runReview）、不碰 内部任务台账 / work-orders.json / limits.json。
+- **判定**（同时满足全部）：单文件改动、改动 < 50 行、文件不在门禁白名单、不碰 orchestrate.mjs 核心函数（runAnalyze / runArchitect / main / runReview）、不碰内部任务台账及其它闸门配置文件。
 - **commit 格式**：轻量通道 `[fix] 描述`（无 T-xx 前缀）；完整通道 `[T-xx] fix: 描述`。
 - **回滚**：任何 commit 都能 `git revert`，轻量通道不降低回滚能力。
 
@@ -80,20 +80,20 @@
 - **适用**：可执行源码文件（`.mjs` / `.js` / `.cjs` / `.ts` / `.py` 等）。**不适用**：markdown/文档/数据文件、`node_modules/`、`vendor/`、构建产物、一次性草稿。
 - **拆分线 51200 字节（50 KiB）**：任何源码文件超线即触发**拆分义务**——立即冻结"只减不增"，并在台账登记拆分计划，目标拆回 50 KiB 以下。
 - **机械执行**：`orchestrator/verify-gate.mjs` ⑦ 体量纪律闸以 `SIZE_LEDGER` 维护"超线文件 → 冻结上限字节"。任一超线文件增长、或出现未登记的**新**超线文件 → 闸门 FAIL，不许提交。当前覆盖 `orchestrator/`（顶层 + `lib/`）。
-- **存量豁免账本**（2026-10-13 清点）：仅 `orchestrator/orchestrate.mjs`（210539 B；T-59 批次上限 216000 B，等价"只减不增"）。`cfnext/worker.js`（352KB，子项目构建物疑云）标注"另案评估"。
+- **存量豁免账本**（2026-10-13 清点）：仅 `orchestrator/orchestrate.mjs`（210539 B；上限 216000 B，等价"只减不增"）。
 - **变更程序**：台账值**只降不升**（合法净减后修订）；确需上调上限属修宪级，须用户拍板。
 
 ## M5 安全与密钥
 
 **禁手清单**：
-- `git reset --hard`、`git clean -fd`、`git checkout -- .` 默认禁用（会抹掉别人未提交的工作）；永不重写历史；审计/基线文件（各类 `汇总.md`、`FREEZE_RECORD`）只读不改。
+- `git reset --hard`、`git clean -fd`、`git checkout -- .` 默认禁用（会抹掉别人未提交的工作）；永不重写历史；审计/基线文件只读不改。
 
 **安装底线**：
 - ①尽量工作区内安装，不动全局环境；②只从官方源下载并核对校验和，**禁止** `iex (iwr …)` / `curl | bash`；③装完写记录并提交。
 
 **密钥与敏感信息**：
-- 密钥**永不进 URL、不进命令行**，用环境变量或已忽略的密钥文件（如 `titan_secrets.env`）。
-- 敏感文件（`**/titan_secrets.env`）已被 `.gitignore` 强制排除，**永远不要**用 `git add -f` 强行加入。
+- 密钥**永不进 URL、不进命令行**，用环境变量或本地已忽略的密钥文件。
+- 敏感密钥文件已被 `.gitignore` 强制排除，**永远不要**用 `git add -f` 强行加入。
 - 提交前 `git status` 审查：暂存内容里有没有密钥、缓存、浏览器数据、`node_modules`？有则先加 `.gitignore` 再提交。
 
 ## M6 用户交互
@@ -106,15 +106,15 @@
 
 **共享跨会话记忆（titan-memory，四客户端共用）**：
 - **形态**：`titan-memory/` 零依赖 MCP stdio server，6 个工具 `titan_memory_remember` / `titan_memory_recall` / `titan_memory_search` / `titan_memory_consolidate` / `memory_core_recall` / `memory_core_remember`。
-- **接线**：OpenCode `opencode.json` → `mcp.titan`；Kilo Code `.kilo/kilo.json` → `mcp.titan`（env `TITAN_CLIENT=kilo`）；Cline `.cline/mcp.json` + `~/.cline/data/settings/cline_mcp_settings.json`（两处同名 `titan`，内容必须一致）；DeepSeek Harness 不接，仍用原生 8 工具。
-- **存储**：四端共写同一份 `C:\Users\Administrator\.dsh\storages\dsh_memory.json`。**路径必须归一**：`TITAN_WORKSPACE` 必须经 `normalizeWorkspacePath` 归一到原生反斜杠后再与 fact 的 `workspacePath` 精确比对——实测写成 `D:/TITAN_ARCHAEOLOGY`（正斜杠）会让召回静默返回 0 条。
+- **接线**：各客户端在自己的配置目录中接入本记忆服务（MCP 服务名 `titan`，各端内容一致）；DeepSeek Harness 用其原生工具，无需额外接线。
+- **存储**：四端共写同一份本地记忆存储文件（路径按各端环境而定）。**路径必须归一**：工作区路径必须归一到原生路径格式后再与事实记录的 `workspacePath` 精确比对——格式不一致会让召回静默返回 0 条。
 - **强制用法**：M1 读台账之后、动手之前调一次 `titan_memory_recall`；收尾前把可复用结论用 `titan_memory_remember` 落盘。翻历史会话用 `titan_memory_search`。
 - **Core memory**：`titan-memory/core/CORE.md`（≤3000 字符常驻核心记忆）+ `notes/*.md`（长尾笔记），纯 markdown、零网络、可 git 版本管理。客户端启动时可选注入 CORE.md。
 - **边界**：记忆是补充，**不是**台账替代——状态机仍以内部任务台账为准。
 - **回归**：`node titan-memory/test.mjs` → 46/46；`node titan-memory/verify-cline.mjs` → 14/14。
 
 **工具感知（本机增强工具，主动用，不等用户提醒）**：
-- **ripgrep**：`D:\TITAN_ARCHAEOLOGY\bin\rg.exe`（15.2.0，2026-10-15 装）。搜代码/大日志**优先用 rg**：`& D:\TITAN_ARCHAEOLOGY\bin\rg.exe -n -i "pattern" <路径>`；rg 缺席才退 Select-String。
-- **dsh-ops-bridge**：`dsh-ops-bridge/server.mjs`（零依赖 MCP stdio），6 工具 `ops_inspect` / `ops_grep` / `ops_glob` / `ops_replace` / `ops_pdf_text` / `ops_html2md`——把 dsh-ops 的 Rust worker 工具 + pdf/html2md 桥接给 OpenCode/Cline/Kilo 三客户端（Harness 用原生 DSH 插件无需桥接）。接线同 titan-memory（三客户端 mcp 段加 `dsh-ops`）。
+- **ripgrep**：本机已装 ripgrep（rg）。搜代码/大日志**优先用 rg**：`rg -n -i "pattern" <路径>`；rg 缺席才退 Select-String。
+- **dsh-ops-bridge**：零依赖 MCP stdio 桥接工具（`ops_inspect` / `ops_grep` / `ops_glob` / `ops_replace` / `ops_pdf_text` / `ops_html2md`），把 Rust worker 工具 + pdf/html2md 桥接给 OpenCode/Cline/Kilo 三客户端（Harness 用原生 DSH 插件无需桥接）。接线同 titan-memory。
 - **实战落盘义务**：每次实战操作收尾前，把可复用要点与踩坑用 `titan_memory_remember` 落盘（事实/决定类，≤2000 字，打关键词标签）——与 M1 第 2 步构成闭环：**开工必 recall，收尾必 remember**。
 

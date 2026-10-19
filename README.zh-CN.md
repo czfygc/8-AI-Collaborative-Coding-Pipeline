@@ -12,6 +12,8 @@ Alpha 阶段，非生产级——但整条回路真实可跑、可审计。
 
 ## 怎么运转——9 席，3 阶段
 
+> 「8-AI」指一个周期内实际干活的 8 个 AI：网页 4 评审 + 本地 4 客户端。第 9 席是网页 AI 替补——它吸收改版/掉线等不确定性，保证评审席位永不缺员，但不参与每一轮评审。
+
 ```
  阶段1 · 设计与拆解                  阶段2 · 代码落地                阶段3 · 复核闸门
 ┌─────────────────────────────┐    ┌──────────────────────────────┐    ┌──────────────────────────┐
@@ -43,22 +45,26 @@ Alpha 阶段，非生产级——但整条回路真实可跑、可审计。
 | `orchestrator/lib/` | 拆分后的职责模块（`scan-entry.mjs`、`analyze-core.mjs`、`architect.mjs`、`reviewers.mjs` 等） |
 | `orchestrator/test/` | 21 个 gate 测试用例 |
 | `titan-memory/` | 跨客户端共享记忆 MCP 服务器（零依赖） |
-| `.agents/` | 四个本地客户端共用的技能 |
+| `.agents/` | 评审协议技能（四方会诊、评审通道选型） |
 | `AGENTS.md` | 四客户端协作契约（必加载，自包含） |
 
 **不包含在本仓库的部分**（本地配置与部署产物，属流水线运行环境而非发布内容）：
 
 - `freellmapi-src/` — FreeLLMAPI 本地网关（<https://github.com/neclomin/freellmapi>）
 
-## 环境准备（快速开始的前置）
+## 环境准备
 
 ```powershell
 # 0. 前置：Node.js (>=18) 与 npm
 
 # 1. 安装流水线依赖（playwright-core、@playwright/mcp、js-yaml）
 npm install
+```
 
-# 2. 准备一台 CDP 浏览器（本仓库不附带）
+基础验证只需要 `npm install`。CDP 浏览器**仅**在运行网页 AI 审查流（阶段 1 / 阶段 3 的网页席）时才需要：
+
+```powershell
+# 2. 可选——仅网页 AI 审查流需要
 #    以远程调试模式启动 Chrome/Edge，监听 9222 端口：
 #    chrome.exe --remote-debugging-port=9222 --user-data-dir="<本地目录>"
 #    user-data-dir（chrome-cdp-profile）是本地运行时数据，不在本仓库。
@@ -77,7 +83,7 @@ node orchestrator/verify-gate.mjs
 node --test orchestrator/test/
 ```
 
-预期：`verify-gate.mjs` 退出码 `0`，`[GATE] RESULT: OK`。闸门要求环境准备第 2 步的 CDP 浏览器在 `127.0.0.1:9222` 可达。
+预期：`verify-gate.mjs` 退出码 `0`，`[GATE] RESULT: OK`。全部基础验证（语法、导入、CLI、测试、自检、体量）**无需任何浏览器**——CDP 浏览器仅网页 AI 审查流（`--review` / `--scan` 的网页席）需要。
 
 ## 当前状态（Alpha / 未生产级）
 
@@ -101,7 +107,7 @@ node --test orchestrator/test/
 | sing-box | 代理与分流 | <https://github.com/SagerNet/sing-box> |
 | OpenClaw | 人机语言交互（手机端：Telegram、WhatsApp 等） | <https://github.com/openclaw/openclaw> |
 
-`orchestrator/` 通过标准 HTTP/gRPC 接口与已接入的 FreeLLMAPI / sing-box 交互。OpenClaw（人机语言交互）尚未接入，不妨碍该能力作为项目卖点先行声明：它是**手机端入口**——OpenClaw 是开源个人 AI 助手，运行在你自己的设备上，出现在你已用的聊天渠道里（Telegram、WhatsApp、Discord、iMessage 等 20+ 渠道 + 手机原生 App），因此可以从手机上用 TG 对话驱动流水线。具体配置留在本地。
+`orchestrator/` 通过标准 HTTP/gRPC 接口与已接入的 FreeLLMAPI / sing-box 交互。OpenClaw 是用于人机语言交互的外部开源项目——**本版本尚未集成，列入路线图**。集成后它将作为**手机端入口**：OpenClaw 是运行在你自己的设备上的个人 AI 助手，出现在你已用的聊天渠道里（Telegram、WhatsApp、Discord、iMessage 等 20+ 渠道 + 手机原生 App），因此可以从手机上用 TG 对话驱动流水线。具体配置留在本地。
 
 ## 贡献
 
