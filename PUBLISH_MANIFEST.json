@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "generatedBy": "orchestrator/publish-sync.mjs",
   "sourceRepo": "D:/TITAN_ARCHAEOLOGY",
-  "sourceCommit": "ab34e84f8aec80fa1085cc199009edc954634d2a",
-  "syncedAt": "2026-10-19T23:52:11.346Z",
+  "sourceCommit": "1f6430da07e6d86684519979563398d1f6811e35",
+  "syncedAt": "2026-10-19T23:56:19.690Z",
   "publishedFiles": 125,
-  "publishedFingerprint": "7970fde655d7ee27e872351bffe3342dda3e93026ceafa432b8659eeb85ea928",
+  "publishedFingerprint": "1cd37af6d7defc8a5b62ba84b4315a5a48bcf1af7f3e8e28d69ed8775aea4164",
   "note": "本仓由 D:/TITAN_ARCHAEOLOGY 的发布树同步生成；来源提交见 sourceCommit；禁推清单见 publish-sync.mjs NEVER_PUBLISH。"
 }

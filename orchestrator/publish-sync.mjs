@@ -499,7 +499,9 @@ function cmdApply(opts) {
   newLedger.lastSync.at = new Date().toISOString();
   newLedger.lastSync.syncedFiles = copied.length;
   newLedger.lastSync.syncedFileList = copied;
-  newLedger.lastSync.prunedFiles = pruned;
+  // 剔除记录累计保留（后续 apply 只同步少量文件时不应抹掉历史剔除审计）
+  const prevPruned = (ledger && ledger.lastSync && ledger.lastSync.prunedFiles) || [];
+  newLedger.lastSync.prunedFiles = Array.from(new Set([...prevPruned, ...pruned]));
   writeLedger(localRoot, newLedger);
   console.log('  [账本] ' + LEDGER_NAME);
 
