@@ -22,11 +22,11 @@
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { promises as fsPromises } from 'node:fs';
 import { resolve as resolvePath, normalize as normalizePath, join, sep as pathSep } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import * as yaml from 'js-yaml';
 import { TITAN_ROOT, CDP_HOST, REVIEWERS_YAML } from './constants.mjs';
 import { CDP } from '../cdp-client.mjs';
 import { runTabUpload } from './session-send.mjs';
+import { runProcess } from './proc-tree.mjs';
 
 export async function runScanEntry({ scanFile, args, getFlagValue, getIntFlag }) {
   const { runScanMode, parseFindingsJson } = await import('../scan-flow.mjs');
@@ -185,18 +185,23 @@ const localOnly = forceLocalOnly(scanIsMulti, args.includes('--local-only'));
          execArgs.push('--file', relOf(scanAbsList[0].replace(/\\/g, '/')));
          console.log('[SCAN] auto-fix -> node ' + execArgs.join(' ') + ' （scan 无基线，自动 --skip-baseline + --file 单文件模式）');
        }
-const r = spawnSync('node', execArgs, { cwd: TITAN_ROOT, encoding: 'utf8', timeout: 900000, stdio: ['ignore', 'pipe', 'pipe'] });
+        // T-124：外层改 runProcess（超时杀整棵树）——旧 spawnSync 超时只杀直接子进程，
+        // titan-execute 与其 LLM 孙进程变孤儿继续跑，可在本轮判失败后仍改动工作树甚至提交。
+        const r = await runProcess({ cmd: 'node', args: execArgs, cwd: TITAN_ROOT, env: process.env, timeoutMs: 900000, idleMs: 0, label: 'scan-auto-fix' });
         if (r.stdout) process.stdout.write(r.stdout);
         if (r.stderr) process.stderr.write(r.stderr);
-        console.log('[SCAN] auto-fix exit=' + r.status + ' -> ' + join(scanOutDir, 'execute-result.json'));
-        if (r.error || r.signal || r.status !== 0) {
-          console.error('[SCAN] auto-fix failed:', r.error || r.signal || `exit code ${r.status}`);
+        console.log('[SCAN] auto-fix exit=' + r.exitCode + ' -> ' + join(scanOutDir, 'execute-result.json'));
+        if (r.error || r.timedOut || r.exitCode !== 0) {
+          const errText = r.timedOut
+            ? 'executor timeout (process tree killed)'
+            : (r.error || `Non-zero exit code: ${r.exitCode}`);
+          console.error('[SCAN] auto-fix failed:', errText);
           await fsPromises.writeFile(join(scanOutDir, 'execute-result.json'), JSON.stringify({
             success: false,
-            error: r.error?.message || r.signal || `Non-zero exit code: ${r.status}`,
-            exitCode: r.status,
-            signal: r.signal,
-            errorObject: r.error
+            error: errText,
+            exitCode: r.exitCode,
+            timedOut: !!r.timedOut,
+            durationMs: r.durationMs
           }, null, 2));
           process.exit(1);
         } else {

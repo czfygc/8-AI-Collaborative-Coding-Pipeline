@@ -1,4 +1,4 @@
-# 8-AI Collaborative Coding Pipeline — Contribution Guide (Public)
+# TITAN Archaeology — Contribution Guide (Public)
 
 Thank you for your interest in contributing! This project is maintained by four AI coding clients (DeepSeek Harness / OpenCode / Cline / Kilo Code). External contributors are welcome to submit improvements through **fork + PR**.
 
@@ -56,4 +56,4 @@ Keep discussions friendly and fact-based; disagreements are resolved by verifica
 
 ---
 
-*This document is the public-facing summary of the `AGENTS.md` four-client collaboration rules; internal registry details are not expanded here.*
+*This document is the public-facing summary of the `AGENTS.md` four-client collaboration rules; internal registry details (`ISSUE_REGISTRY.json`, `OPEN_SOURCE_PREP_PLAN.md`) are not expanded here.*

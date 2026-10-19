@@ -125,6 +125,26 @@ reviewers_role:
     upload_menu_item_text: null
     upload_wait_ms: 3000
 
+  - name: chatgpt
+    display_name: "ChatGPT"
+    url_match: "chatgpt\\.com"
+    url_open: "https://chatgpt.com/"
+    perspective: "咨询席——任务咨询与意见回复（仅回文本意见，不做架构裁决，不发附件，不占配额）"
+    perspective_prompt: |
+      请作为咨询席，针对以下任务给出简明意见与建议：仅回文字面咨询意见，不做架构裁决，不处理附件。
+    prefix: "C"
+    enabled: true
+    editor_selector: '[contenteditable="true"].ProseMirror'
+    # 与 architect 段对齐：不设 submit_selector，走 testid send-button 兜底链（T-62 生产验证）
+    submit_selector: null
+    response_selector: "main"
+    upload_strategy: "direct"
+    file_input_selector: 'input[type="file"]'
+    upload_button_selector: null
+    upload_menu_item_text: null
+    upload_wait_ms: 3000
+    role: consultant
+
 # ============ MODE_B: 代码扫描模式（8-9 模型并行扫描）===========
 # 适用场景：代码扫描/修复 —— 8-9 模型并行扫描同一文件
 #   各自独立找问题（不分角色，各自全维度扫描）

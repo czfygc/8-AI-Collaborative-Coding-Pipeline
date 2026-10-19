@@ -10,7 +10,13 @@ $botScript = Join-Path $PSScriptRoot 'titan_telegram_bot.py'
 $logDir    = Join-Path $repo 'archive\evidence\tmp\t120-m4'
 $outLog    = Join-Path $logDir 'bot-run.out.log'
 $errLog    = Join-Path $logDir 'bot-run.err.log'
-$py        = 'C:\Users\Administrator\AppData\Local\Programs\Python\Python312\python.exe'
+# python 解释器：优先 TITAN_PYTHON 环境变量，其次 PATH（脱敏：不再硬编码本机绝对路径）
+$py        = $env:TITAN_PYTHON
+if (-not $py) {
+    $cmd = Get-Command python -ErrorAction SilentlyContinue
+    if ($cmd) { $py = $cmd.Source }
+}
+if (-not $py) { throw '未找到 python：请设置环境变量 TITAN_PYTHON，或确保 python 在 PATH' }
 
 if (-not (Test-Path -LiteralPath $secrets)) { throw "缺少密钥文件: $secrets" }
 if (-not (Test-Path -LiteralPath $botScript)) { throw "缺少 bot 脚本: $botScript" }
@@ -27,8 +33,7 @@ Get-Content -LiteralPath $secrets -Encoding UTF8 | ForEach-Object {
 
 # 非密钥配置（明文无妨）
 $env:TITAN_GATEWAY_URL       = 'http://127.0.0.1:5301/task'
-# 换成你自己的 Telegram 用户 ID（见 USAGE_GUIDE 第 8 节第 3 步）。留占位符 = 全部拒绝，安全默认。
-$env:TITAN_ALLOWED_USER_IDS  = '<YOUR_TELEGRAM_USER_ID>'
+$env:TITAN_ALLOWED_USER_IDS  = '7093896164'
 $env:PYTHONUNBUFFERED        = '1'   # 日志实时落盘，否则块缓冲会卡住观察不到
 
 if (-not $env:TITAN_BOT_TOKEN) { throw "titan_secrets.env 缺少 TITAN_BOT_TOKEN" }

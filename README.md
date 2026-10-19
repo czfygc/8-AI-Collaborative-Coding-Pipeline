@@ -1,4 +1,4 @@
-# 8-AI Collaborative Coding Pipeline — Ship Your Project Without Writing Code
+# TITAN Archaeology — Ship Your Project Without Writing Code
 
 > **[English](README.md) | [简体中文](README.zh-CN.md)**
 
@@ -6,7 +6,7 @@
 
 You have a project idea but you don't write code — or you don't want to spend months doing it.
 
-8-AI Collaborative Coding Pipeline is a multi-AI consultation and implementation pipeline that takes you from **project design to working code**: independent web-AI seats design and decompose the project, local coding agents implement it, and a full eight-party review gate signs off before anything merges. Non-coders drive the whole thing through natural-language human–computer interaction — describe the goal, and the pipeline does the rest.
+TITAN Archaeology is a multi-AI consultation and implementation pipeline that takes you from **project design to working code**: independent web-AI seats design and decompose the project, local coding agents implement it, and a full eight-party review gate signs off before anything merges. Non-coders drive the whole thing through natural-language human–computer interaction — describe the goal, and the pipeline does the rest.
 
 Alpha, not production-grade — but the whole loop is real, runnable, and auditable.
 

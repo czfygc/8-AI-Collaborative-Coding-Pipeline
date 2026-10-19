@@ -18,10 +18,10 @@
 | # | 检查项 | 命令/动作 | 通过标准 |
 |---|--------|-----------|----------|
 | 1 | CDP 端口可达 | `curl -s http://127.0.0.1:9222/json/version` | HTTP 200 + 返回 Browser/Protocol-Version |
-| 2 | Chrome 进程带持久 profile | `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | ? CommandLine -match 'user-data-dir'` | 含 `--user-data-dir=<profile-dir>` |
+| 2 | Chrome 进程带持久 profile | `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | ? CommandLine -match 'user-data-dir'` | 含 `--user-data-dir=D:\TITAN_ARCHAEOLOGY\chrome-cdp-profile` |
 | 3 | 三方 reviewer tab 全在线 | `curl -s http://127.0.0.1:9222/json/list \| jq '.[] \| select(.url | test("gemini|deepseek|qwen"))'` | 至少 3 个 tab，url 对应且 `type=="page"`（席位名单以 reviewers.yaml enabled 为准；2026-10-12 起 gemini/deepseek/qwen） |
 | 4 | ChatGPT tab 就绪 | `curl -s .../json/list \| jq '.[] \| select(.url | test("chatgpt"))'` | `type=="page"`，url `chatgpt.com`，**非** "Just a moment..."、非挑战页 |
-| 5 | 无遗留挑战 | `tools/_probe_chatgpt.mjs` | `challenge=false, editor=true, bodyLen>100` |
+| 5 | 无遗留挑战 | `D:\TITAN_ARCHAEOLOGY\.agents\skills\titan-four-party-consult\tools\_probe_chatgpt.mjs` | `challenge=false, editor=true, bodyLen>100` |
 | 6 | reviewers.yaml thresholds 正确 | `cat orchestrator/reviewers.yaml \| grep -A5 thresholds` | `blind_spot_to_delta: HIGH; single_reviewer_to_delta: HIGH` |
 | 7 | 回归基线跑通（代码改动后必跑） | `node orchestrate.mjs --analyze 66c0f00e` + `_fixture_stest2` | 断言与 `_session_memory.md` 第 2 节完全一致 |
 
@@ -33,11 +33,11 @@
 
 ```powershell
 # 正式四方会诊（单条命令，自动：dispatch → analyze → architect）
-cd <workspace>\orchestrator
+cd D:\TITAN_ARCHAEOLOGY\orchestrator
 node orchestrate.mjs --review <artifact-path> --analyze --architect
 ```
 
-- `<artifact-path>`：待审文件/目录绝对路径（例：`orchestrator/orchestrate.mjs`）
+- `<artifact-path>`：待审文件/目录绝对路径（例：`D:\TITAN_ARCHAEOLOGY\orchestrator\orchestrate.mjs`）
 - **严禁**加 `--force` 除非明确要绕过去重重跑（且知晓后果）
 - 不要拆成多条命令跑（`--review` 单跑会卡在等待 reviewer，**必须**链式 `--analyze --architect` 让编排器自动串起）
 
@@ -105,8 +105,8 @@ node orchestrate.mjs --analyze _fixture_stest2
 |----|--------|
 | Chrome 版本 | Chrome/153.0.8010.12（playwright chromium-1243） |
 | CDP 端口 | 127.0.0.1:9222（`--remote-debugging-port=9222 --remote-debugging-address=127.0.0.1`） |
-| 持久 profile | `<profile-dir>`（含登录态、验证 Cookie） |
-| 启动器 | `orchestrator/启动 CDP 浏览器.bat`（桌面快捷入口可另行创建，两份内容同步） |
+| 持久 profile | `D:\TITAN_ARCHAEOLOGY\chrome-cdp-profile`（含登录态、验证 Cookie） |
+| 启动器 | `orchestrator/启动 CDP 浏览器.bat`（桌面快捷入口 `%USERPROFILE%\Desktop\CDP浏览器.bat`，两份内容同步） |
 | reviewer tabs | Gemini / DeepSeek / Grok / ChatGPT 均已登录、保持打开（席位名单唯一事实源 = reviewers.yaml enabled:true；2026-10-14 qwen 服务器宕机 → 用户指令换回备胎 grok 并实探定配（editor=div.tiptap.ProseMirror / submit=button[aria-label="Submit"] / response_selector=.message-bubble.rounded-3xl），qwen 恢复后重评再切。ChatGPT 兼 architect 席，url_match `chatgpt\.com`） |
 | 网页席附件配额（2026-10-14 用户拍板） | **ChatGPT 带附件问询每日 3 次**（支持 .zip，≤512MB；单会话≤20 文件）；**Gemini 单会话≤10 文件**（skip_fresh_chat 复用页时额度被多轮分摊，第 11 个前导航新会话）；**DeepSeek 不支持 .zip**（发原始文件或 inline）；其余席位不限。派单纪律：小 artifact（<20000 字符）走 inline=零消耗；消耗 chatgpt 附件配额的 dispatch 须按 3/日记账 |
 | thresholds | `blind_spot_to_delta: HIGH; single_reviewer_to_delta: HIGH; single_reviewer_to_backlog: [LOW,MEDIUM]` |

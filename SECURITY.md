@@ -1,4 +1,4 @@
-# 8-AI Collaborative Coding Pipeline — Security Policy
+# TITAN Archaeology — Security Policy
 
 ## Vulnerability Reporting
 
@@ -14,7 +14,8 @@ We will confirm receipt as soon as possible and prioritize by severity.
 ## Secret Handling (Pre-Open-Source Red Lines)
 
 - **Secrets must never go in URLs, command-line arguments, or conversations** — use `titan_secrets.env` (already `gitignore`d) or environment variables.
-- This tree has completed the secret audit: **no real API keys or secret values are tracked**. If you later add proxy/node credentials, replace every real UUID/secret with a `<YOUR_UUID>` placeholder before open-sourcing; real values stay only in `gitignored` local configs.
+- Current tree and git history have completed secret audits: **zero real API keys/secret values**. However, there are **3 VLESS UUIDs pending rotation** and tracked credentials in `bin/`/`cfnext/` (see `reports/OPEN_SOURCE_SECRET_AUDIT.md`). These are not "zero credentials" and must be rotated before open-sourcing (R-04 consistent).
+- `cfnext/wrangler.toml` and several documents under `bin/` contain proxy node UUIDs. Before open-sourcing, rotate them and replace with `<YOUR_UUID>` placeholders (R-07: real UUIDs only in `gitignored` local configs; all tracked templates must use placeholders). Otherwise, publishing the repo immediately leaks node credentials.
 
 ## Disclaimer
 

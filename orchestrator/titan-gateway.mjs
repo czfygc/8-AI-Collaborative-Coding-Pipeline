@@ -38,9 +38,18 @@ function isAllowed(userId) {
 }
 
 // 运行 TITAN 编排器，返回 { ok, dispatchId, summary, stderr }
-function runTitanTask({ artifactPath, prompt, userId, trigger }) {
+function runTitanTask({ artifactPath, prompt, userId, trigger, mode, filePath }) {
   const args = [];
-  if (artifactPath) {
+  let timeoutMs = 900000; // 15 分钟：run 咨询 4 席并行 capture 实测 254s/3席，4 席贴 300s 会 ETIMEDOUT（T-122 e2e 实证）
+  if (mode === 'scan' && filePath) {
+    // T-122 步骤2.3：语音落地路径 → --scan <file> --auto-fix（扫描→修复→verify→commit）
+    const abs = resolvePath(TITAN_ROOT, filePath);
+    if (!abs.startsWith(TITAN_ROOT + '\\') && abs !== TITAN_ROOT) {
+      return { ok: false, dispatchId: null, summary: 'file path outside TITAN_ROOT', stderr: '' };
+    }
+    args.push('--scan', abs, '--auto-fix');
+    timeoutMs = 1800000; // 30 分钟：scan 实测网页席 4 席 capture ~14.5min + auto-fix 执行链（T-122 e2e：16min 上限曾掐断执行链）
+  } else if (artifactPath) {
     // 绝对路径必须在 TITAN_ROOT 内
     const abs = resolvePath(TITAN_ROOT, artifactPath);
     if (!abs.startsWith(TITAN_ROOT + '\\') && abs !== TITAN_ROOT) {
@@ -57,7 +66,7 @@ function runTitanTask({ artifactPath, prompt, userId, trigger }) {
   const res = spawnSync(NODE, [ORCHESTRATE, ...args], {
     cwd: TITAN_ROOT,
     encoding: 'utf8',
-    timeout: 300000, // 5 分钟
+    timeout: timeoutMs,
     maxBuffer: 10 * 1024 * 1024,
   });
 
@@ -85,6 +94,46 @@ function runTitanTask({ artifactPath, prompt, userId, trigger }) {
       if (existsSync(archPath)) {
         architectDecision = readFileSync(archPath, 'utf8').slice(0, 1000);
       }
+    }
+  }
+
+  // T-122: --run 咨询模式无 layer-b，从 stdout 的 [OUT] 目录读取 raw/*.md，
+  // 拼接各席位（deepseek/qwen/grok/chatgpt）意见摘要，经 bot 回传 TG。
+  if (!summary) {
+    const outM = out.match(/\[OUT\] (\S+)/);
+    if (outM) {
+      const rawDir = join(outM[1], 'raw');
+      if (existsSync(rawDir)) {
+        const parts = [];
+        for (const f of readdirSync(rawDir).filter(f => f.endsWith('.md')).sort()) {
+          const t = readFileSync(join(rawDir, f), 'utf8').trim();
+          const body = t.replace(/^#[^\n]*\n+URL:[^\n]*\n+Title:[^\n]*\n*/i, '').trim();
+          if (body) parts.push('【' + f.replace(/\.md$/, '') + '】' + body.slice(0, 600));
+        }
+        if (parts.length) summary = parts.join('\n\n').slice(0, 3000);
+      }
+    }
+  }
+
+  // T-122 步骤2.5：--scan 落地模式摘要（findings + delta + 执行链结果）回传 TG
+  if (!summary && mode === 'scan') {
+    const sm = out.match(/\[SCAN\] findings=(\d+) -> (.+?)delta\.md/);
+    if (sm) {
+      const scanDir = sm[2]; // 形如 D:\...\reviews\scan-xxx\layer-b\
+      const bits = ['扫描发现 ' + sm[1] + ' 项问题'];
+      const deltaPath = join(scanDir, 'delta.md');
+      if (existsSync(deltaPath)) bits.push(readFileSync(deltaPath, 'utf8').slice(0, 1500));
+      const execPath = join(scanDir, 'execute-result.json');
+      if (existsSync(execPath)) {
+        try {
+          const er = JSON.parse(readFileSync(execPath, 'utf8'));
+          bits.push('执行链: ' + (er.success ? '成功，修复已 verify 通过并 commit' : '失败: ' + (er.error || ('exit ' + er.exitCode))));
+        } catch (e) { /* execute-result.json 解析失败不影响摘要 */ }
+      } else {
+        const noFind = out.includes('--auto-fix：无 findings');
+        bits.push(noFind ? '无问题，未触发执行链' : '执行链未产出 execute-result.json');
+      }
+      summary = bits.join('\n').slice(0, 2500);
     }
   }
 
@@ -136,8 +185,8 @@ function handleRequest(req, res) {
         return;
       }
 
-      const { prompt, artifact_path, trigger } = parsed;
-      const result = runTitanTask({ artifactPath: artifact_path, prompt, userId, trigger });
+      const { prompt, artifact_path, trigger, mode, file_path } = parsed;
+      const result = runTitanTask({ artifactPath: artifact_path, prompt, userId, trigger, mode, filePath: file_path });
 
       const status = result.ok ? 200 : 500;
       res.writeHead(status, { 'Content-Type': 'application/json', ...corsHeaders });

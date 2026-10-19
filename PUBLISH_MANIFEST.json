@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "orchestrator/publish-sync.mjs",
+  "sourceRepo": "D:/TITAN_ARCHAEOLOGY",
+  "sourceCommit": "ab34e84f8aec80fa1085cc199009edc954634d2a",
+  "syncedAt": "2026-10-19T23:41:56.662Z",
+  "publishedFiles": 117,
+  "publishedFingerprint": "366472e51207c06d432386b7562c8bd09308654a4e0651087ad43d2a721ace9c",
+  "note": "本仓由 D:/TITAN_ARCHAEOLOGY 的发布树同步生成；来源提交见 sourceCommit；禁推清单见 publish-sync.mjs NEVER_PUBLISH。"
+}

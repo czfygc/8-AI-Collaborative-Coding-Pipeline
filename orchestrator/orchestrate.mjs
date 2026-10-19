@@ -591,10 +591,12 @@ async function main() {
     const results = await withDispatchSuffix(dispatchId, async () => Promise.allSettled(getReviewers().map(rv => runTab(cdp, pages[rv.name], rv, promptForAll, rawDir, shotDir))));
     for (let i = 0; i < getReviewers().length; i++) {
       const rv = getReviewers()[i], r = results[i];
+      // T-122 步骤1.4：席位日志带角色标签，咨询席(chatgpt consultant)与架构师席出场可区分
+      const roleTag = rv.role ? '(' + rv.role + ')' : '';
       if (r.status === 'fulfilled') {
-        console.log('  ' + rv.name + ': OK  textLen=' + (r.value.snapshot?.lastTextLen || 0) + '  phases=' + r.value.phase.join(' -> '));
+        console.log('  ' + rv.name + roleTag + ': OK  textLen=' + (r.value.snapshot?.lastTextLen || 0) + '  phases=' + r.value.phase.join(' -> '));
       } else {
-        console.log('  ' + rv.name + ': FAILED  ' + (r.reason?.message || r.reason));
+        console.log('  ' + rv.name + roleTag + ': FAILED  ' + (r.reason?.message || r.reason));
       }
     }
     console.log('[OUT] ' + outDir);

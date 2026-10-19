@@ -107,6 +107,7 @@ export function loadEnabledReviewers(modeOverride) {
       upload_wait_ms: Number.isFinite(uploadWait) && uploadWait > 0 ? uploadWait : 3000,
       response_max_ms: Number.isFinite(Number(r.response_max_ms)) && Number(r.response_max_ms) > 0 ? Number(r.response_max_ms) : null,
       submit_selector: r.submit_selector || null,
+      role: r.role || null,
     };
   });
 }

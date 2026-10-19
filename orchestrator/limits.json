@@ -1,5 +1,5 @@
 {
-  "_comment": "⑦ 扩容每日上限 —— 硬编码入库。任何修改必须改本文件并提交，与合同修订同批评审。CDP 与 API 通道分开记账。",
+  "_comment": "⑦ 扩容每日上限 —— 硬编码入库（Director 2026-10-02 指令：不允许临时调）。任何修改必须改本文件并提交，与合同修订同批评审。CDP 与 API 通道分开记账。2026-10-16 Director 更新：席位实测容量=无附件 10 次/日/席、带附件 3 次/日/席；dispatch_cdp 按无附件口径重定 2→10（带附件 3 次限制待 upload 流程另案编码）。",
   "version": "1.0.0",
   "effective_from": "2026-10-02",
   "daily": {
@@ -18,9 +18,9 @@
     "disk_free_mb_min": 1024
   },
   "fixer_scheduler": {
-    "_comment": "先串行跑通机制，补 key 后把 max_concurrent_fixers 改 2 且两修理工用不同模型（不互抢 mistral-code）。",
+    "_comment": "Director 2026-10-02：先串行跑通机制，补 key 后把 max_concurrent_fixers 改 2 且两修理工用不同模型（不互抢 mistral-code）",
     "max_concurrent_fixers": 2,
-    "flip_note": "席位/模型切换记录占位符：按实际测试结果填写；修理工模型不进 reviewer 独立性判定；两槽 fallback 链刻意错开，避免并发时互抢同一模型。",
+    "flip_note": "2026-10-02 Director 补 key + FreeLLMAPI 重启后切换：deepseek-v4-pro/claude-sonnet-5 实测 200（两槽主选全绿）；gemini 仍 502=Google 上游拥堵（attempt trail 证实 key 已被调用），gemini 是 reviewer 席不在修理工链内；openrouter $12 扣费疑路由问题另行复查",
     "slots": {
       "fixerA": { "client": "cline", "pin": "claude-sonnet-5", "fallbacks": ["mistral-code"], "flag": "-P openai -m", "chain_note": "gemini 502/429 震荡期移出修理工链（保留给 reviewer 席）；A 末档=mistral-code" },
       "fixerB": { "client": "opencode", "pin": "deepseek-v4-pro", "fallbacks": ["claude-sonnet-5", "codestral"], "flag": "-m freellmapi/" }

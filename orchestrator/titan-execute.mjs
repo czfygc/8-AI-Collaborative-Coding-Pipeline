@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { extractAlreadyResolvedProof, proofLineMatches } from './lib/already-resolved-proof.mjs';
 import { checkFileSanity } from './lib/file-sanity.mjs';
+import { runPairedTest, runSemanticGuard } from './lib/semantic-guard.mjs';
+import { runProcess } from './lib/proc-tree.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // P-27 修复（R3-002，kilo 席发现）：执行器修复轮曾在 ESM 里写 require('./config')/
@@ -38,6 +40,10 @@ const argv = process.argv.slice(2);
 const dispatchId = argv[0];
 const executorName = argv.includes('--executor') ? argv[argv.indexOf('--executor') + 1] : 'opencode';
 const skipBaseline = argv.includes('--skip-baseline');
+// T-123：语义护栏开关（--skip-semantic 或 TITAN_SEMANTIC_GUARD=0 旁路，紧急用）
+const skipSemantic = argv.includes('--skip-semantic') || process.env.TITAN_SEMANTIC_GUARD === '0';
+// T-123：配对回归测试目录（orchestrator/test/<base>.test.mjs 同名自动发现）
+const SEMANTIC_TEST_DIR = join(TITAN_ROOT, 'orchestrator', 'test');
 // --file <path>：强制所有 ACCEPT DELTA 指向该文件（scan 单文件模式专用——
 // 模型回报的 delta.file 实测有 unknown/code.js 幻觉，会导致假 PASS 与根目录污染）
 const forceFile = argv.includes('--file')
@@ -239,13 +245,23 @@ const timeoutMs = profile.timeoutMs;
 const TIMEOUT_OVERRIDE_MS = Number(process.env.TITAN_EXEC_TIMEOUT_MS) > 0 ? Number(process.env.TITAN_EXEC_TIMEOUT_MS) : 0;
 const BACKOFF_MS = Number(process.env.TITAN_EXEC_BACKOFF_MS) > 0 ? Number(process.env.TITAN_EXEC_BACKOFF_MS) : 30000;
 const DEGRADE_ORDER = ['opencode', 'cline', 'kilo', 'harness'];
+// T-124：空闲看门狗——进程活着但 stdout/stderr 静默 idleMs 毫秒即判挂起并杀整棵树
+// （真挂起不再干等满 600s；慢但有输出的正常工作不受影响——opencode --format json 会持续吐事件）。
+// 0 = 关闭。
+const IDLE_MS = Number(process.env.TITAN_EXEC_IDLE_MS) >= 0 ? Number(process.env.TITAN_EXEC_IDLE_MS) : 300000;
+// T-124：每 delta 累计预算——降档链最坏约 1 小时，远超调用方外层预算（scan-entry 900s），
+// 必被中途砍断并留下半成品改动+孤儿。预算耗尽即止链、记 BLOCKED、回滚、如实上报。
+// 默认 600s < 外层 900s：让执行器自己在预算内收尾，而不是被外层砍。
+const DELTA_BUDGET_MS = Number(process.env.TITAN_EXEC_DELTA_BUDGET_MS) > 0 ? Number(process.env.TITAN_EXEC_DELTA_BUDGET_MS) : 600000;
 
 function sleepMs(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
 // 以指定档案名执行一次（原 runExecutor 泛化：cline 走 PowerShell 包装，其余走通用 cmd 数组）
-function execAs(profileName, promptText, label) {
+// T-124：改异步 runProcess（空闲看门狗 + 硬超时 + 杀整棵树）——旧 spawnSync 超时只杀直接
+// 子进程，LLM 孙进程变孤儿继续跑，可在本轮判失败后仍改动工作树甚至提交。
+async function execAs(profileName, promptText, label) {
   const p = profiles[profileName];
   if (!p || !p.cmd || !p.cmd[0]) return { exitCode: null, stdout: '', stderr: '', unavailable: true, error: 'no profile: ' + profileName };
   const t = TIMEOUT_OVERRIDE_MS || p.timeoutMs || 600000;
@@ -255,7 +271,8 @@ function execAs(profileName, promptText, label) {
   if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
   const promptFile = join(tmpDir, `titan-prompt-${label}-${profileName}-${Date.now()}.txt`);
   writeFileSync(promptFile, promptText, 'utf8');
-  let child;
+  let cmd;
+  let args;
   if (profileName === 'cline') {
     // Cline requires pre-seeded providers.json in --data-dir (OPENAI_BASE_URL env doesn't work)
     const dataDir = p.dataDir ? p.dataDir.replace('${TITAN_ROOT}', TITAN_ROOT) : join(TITAN_ROOT, 'tmp', 'cline-data');
@@ -287,30 +304,56 @@ function execAs(profileName, promptText, label) {
       },
     }, null, 2), 'utf8');
     const ps = `$p = Get-Content -Raw "${promptFile}"; & '${p.cmd[0]}' $p ${p.modelFlag} "${p.defaultModel}" ${(p.extraArgs || []).join(' ')} -c "${pCwd}" --data-dir "${dataDir}" 2>&1 | Out-String`;
-    child = spawnSync('powershell', ['-NoProfile', '-Command', ps], { cwd: pCwd, env: pEnv, timeout: t, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    cmd = 'powershell';
+    args = ['-NoProfile', '-Command', ps];
   } else {
-    child = spawnSync(p.cmd[0], [...p.cmd.slice(1), promptText, ...(p.modelFlag && p.defaultModel ? [p.modelFlag, p.defaultModel] : []), ...(p.extraArgs || [])], { cwd: pCwd, env: pEnv, timeout: t, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    cmd = p.cmd[0];
+    args = [...p.cmd.slice(1), promptText, ...(p.modelFlag && p.defaultModel ? [p.modelFlag, p.defaultModel] : []), ...(p.extraArgs || [])];
   }
-  return { exitCode: child.status, stdout: child.stdout || '', stderr: child.stderr || '', timedOut: !!child.error && child.error.code === 'ETIMEDOUT', error: child.error ? child.error.message : null };
+  const r = await runProcess({ cmd, args, cwd: pCwd, env: pEnv, timeoutMs: t, idleMs: IDLE_MS, label: label + '/' + profileName });
+  return {
+    exitCode: r.exitCode,
+    stdout: r.stdout || '',
+    stderr: r.stderr || '',
+    timedOut: !!r.timedOut,
+    hung: !!r.hung,
+    durationMs: r.durationMs,
+    error: r.error || null
+  };
 }
 
 // 超时退避链：primary 一次 + 重试一次 + 降档（opencode→cline→kilo→harness，缺失档案跳过）。
 // 全部超时 → timedOutAll（BLOCKED 记账，exit 3），有非超时结果（含 exit!=0）即返回。
-async function runWithTimeoutChain(promptText, label) {
+// T-124：链内受每 delta 预算约束（deadline 到点即止链）；挂起/超时的尝试一律先杀树再回滚
+// （onKill 回调由主循环提供），确保下一档执行器从干净基线起步。
+async function runWithTimeoutChain(promptText, label, opts = {}) {
   const chain = [executorName, executorName, ...DEGRADE_ORDER.filter((x) => x !== executorName)];
   const tried = [];
+  const deadline = opts.deadline || 0;
+  const onKill = typeof opts.onKill === 'function' ? opts.onKill : null;
+  let hungCount = 0;
+  let timeoutCount = 0;
   for (const name of chain) {
-    const r = execAs(name, promptText, label);
-    tried.push({ executor: name, exitCode: r.exitCode, timedOut: !!r.timedOut, unavailable: !!r.unavailable });
+    if (deadline && Date.now() >= deadline) {
+      console.log('[BUDGET] 本 delta 累计预算耗尽，止链（剩余执行器不再尝试）');
+      return { exitCode: null, stdout: '', stderr: '', budgetExhausted: true, tried, hungCount, timeoutCount };
+    }
+    const r = await execAs(name, promptText, label);
+    tried.push({ executor: name, exitCode: r.exitCode, timedOut: !!r.timedOut, hung: !!r.hung, unavailable: !!r.unavailable, durationMs: r.durationMs });
     if (r.unavailable) continue;
-    if (r.timedOut) {
-      console.log('[TIMEOUT] ' + name + ' 超时（' + (TIMEOUT_OVERRIDE_MS || (profiles[name] && profiles[name].timeoutMs) || 600000) + 'ms）→ 退避 ' + BACKOFF_MS + 'ms 后继续');
+    if (r.timedOut || r.hung) {
+      if (r.hung) hungCount++; else timeoutCount++;
+      const why = r.hung
+        ? '挂起（空闲 ' + IDLE_MS + 'ms 无输出）'
+        : '超时（' + (TIMEOUT_OVERRIDE_MS || (profiles[name] && profiles[name].timeoutMs) || 600000) + 'ms）';
+      console.log('[TIMEOUT] ' + name + ' ' + why + ' → 杀进程树 + 回滚本 delta 改动 → 退避 ' + BACKOFF_MS + 'ms 后继续');
+      if (onKill) onKill(r.hung ? 'executor-hang' : 'executor-timeout');
       await sleepMs(BACKOFF_MS);
       continue;
     }
-    return { ...r, tried };
+    return { ...r, tried, hungCount, timeoutCount };
   }
-  return { exitCode: null, stdout: '', stderr: '', timedOutAll: true, tried };
+  return { exitCode: null, stdout: '', stderr: '', timedOutAll: true, tried, hungCount, timeoutCount };
 }
 
 // 结果收集
@@ -472,15 +515,39 @@ ALREADY_RESOLVED 判断（如适用）必须写在你 stdout 回复文本里，*
     let preState = null;
     try { preState = { lines: readFileSync(join(TITAN_ROOT, delta.file), 'utf8').split('\n').length }; } catch {}
     const untrackedBefore = new Set(listUntracked());
-    const exec = await runWithTimeoutChain(prompt, delta.id);
+    // T-124：本 delta 累计预算 + 杀树回滚回调。挂起/超时的尝试必须先回滚（执行器可能已改了一半），
+    // 下一档执行器才从干净基线起步；被杀的整棵进程树不留孤儿，杜绝"事后偷偷提交"。
+    const deltaDeadline = Date.now() + DELTA_BUDGET_MS;
+    const onKill = (tag) => {
+      rollbackExecutorChanges(baseCommit, tag);
+      cleanupOrphans(untrackedBefore, tag);
+    };
+    // T-123 语义护栏（修复前基线）：配对回归测试在改动前先跑一遍——只有"基线绿、修复后红"
+    // 才算本次回归。基线本就红（既有红测试）→ 修复后不阻塞，避免误伤正当修复。
+    let semanticBaseline = null;
+    if (!skipSemantic) {
+      semanticBaseline = runPairedTest(join(TITAN_ROOT, delta.file), { root: TITAN_ROOT, testDir: SEMANTIC_TEST_DIR });
+      if (semanticBaseline.status !== 'SKIP') {
+        console.log('  语义基线(' + semanticBaseline.status + '):', semanticBaseline.detail);
+      }
+    }
+    const exec = await runWithTimeoutChain(prompt, delta.id, { deadline: deltaDeadline, onKill });
     let { exitCode, stdout } = exec;
     const stderr = exec.stderr;
 
+    if (exec.budgetExhausted) {
+      console.log('❌ 本 delta 累计预算耗尽（' + DELTA_BUDGET_MS + 'ms）→ BLOCKED 记账');
+      onKill('delta-budget');
+      results.push({ deltaId: delta.id, file: delta.file, status: 'BLOCKED', exitCode: null, reason: 'delta-budget-exhausted', tried: exec.tried });
+      continue;
+    }
+
     if (exec.timedOutAll) {
-      console.log('❌ 执行器超时链耗尽（重试+降档后仍超时）→ BLOCKED 记账');
+      const hangy = exec.hungCount > 0 && exec.timeoutCount === 0;
+      console.log('❌ 执行器' + (hangy ? '挂起' : '超时') + '链耗尽（重试+降档后仍失败）→ BLOCKED 记账');
       console.log('  tried:', JSON.stringify(exec.tried));
-      cleanupOrphans(untrackedBefore, 'timeout-chain');
-      results.push({ deltaId: delta.id, file: delta.file, status: 'BLOCKED', exitCode: null, reason: 'executor-timeout-chain', tried: exec.tried });
+      onKill(hangy ? 'executor-hang' : 'executor-timeout');
+      results.push({ deltaId: delta.id, file: delta.file, status: 'BLOCKED', exitCode: null, reason: hangy ? 'executor-hang-chain' : 'executor-timeout-chain', tried: exec.tried });
       continue;
     }
 
@@ -515,7 +582,11 @@ ALREADY_RESOLVED 判断（如适用）必须写在你 stdout 回复文本里，*
 1) 该 finding 对当前代码已不成立（含被同轮前序 DELTA 修复）→ 在你 stdout 回复文本里输出单独一行：ALREADY_RESOLVED（禁止写进文件），不要改文件；并且**必须**另起一行输出强证明（否则视为未证明，判 FAIL）：
 PROOF: ${delta.file}:<行号>: <该行原文片段（逐字，>=8 字符）>
 2) 仍成立 → 直接修改该文件（只改它、不提交，改完直接返回；禁止改动其他任何文件）。编辑方式硬约束：最小定点替换、禁用 shell 写文件、保持 UTF-8 无 BOM/LF。`;
-      const retry = await runWithTimeoutChain(retryPrompt, delta.id + '-retry');
+      const retry = await runWithTimeoutChain(retryPrompt, delta.id + '-retry', { deadline: deltaDeadline, onKill });
+      if (retry.budgetExhausted) {
+        results.push({ deltaId: delta.id, file: delta.file, status: 'BLOCKED', exitCode: null, reason: 'retry-budget-exhausted', tried: retry.tried });
+        continue;
+      }
       if (retry.timedOutAll) {
         results.push({ deltaId: delta.id, file: delta.file, status: 'BLOCKED', exitCode: null, reason: 'retry-timeout-chain', tried: retry.tried });
         continue;
@@ -547,7 +618,11 @@ PROOF: ${delta.file}:<行号>: <该行原文片段（逐字，>=8 字符）>
 只能二选一：
 1) 主张仍成立 → 在你 stdout 回复文本里输出单独一行：ALREADY_RESOLVED，并另起一行输出：PROOF: ${delta.file}:<行号>: <该行原文片段（逐字，>=8 字符）>（禁止写进文件，禁止改动文件）
 2) 不再主张 → 直接修改该文件（只改它、不提交，改完直接返回；禁止改动其他任何文件）。编辑方式硬约束：最小定点替换、禁用 shell 写文件、保持 UTF-8 无 BOM/LF。`;
-        const proofRetry = await runWithTimeoutChain(proofRetryPrompt, delta.id + '-proof-retry');
+        const proofRetry = await runWithTimeoutChain(proofRetryPrompt, delta.id + '-proof-retry', { deadline: deltaDeadline, onKill });
+        if (proofRetry.budgetExhausted) {
+          results.push({ deltaId: delta.id, file: delta.file, status: 'BLOCKED', exitCode: null, reason: 'proof-retry-budget-exhausted', tried: proofRetry.tried });
+          continue;
+        }
         if (proofRetry.timedOutAll) {
           results.push({ deltaId: delta.id, file: delta.file, status: 'BLOCKED', exitCode: null, reason: 'proof-retry-timeout-chain', tried: proofRetry.tried });
           continue;
@@ -613,6 +688,28 @@ PROOF: ${delta.file}:<行号>: <该行原文片段（逐字，>=8 字符）>
       continue;
     }
 
+    // T-123 语义护栏：sanity 只到语法级——"改成了什么"仍无人管（T-122 e2e run#1 实录：
+    // `s += i` 改成 `sum += i` 语法全绿却被自动提交）。语义正确性靠证据：
+    //   (a) 配对回归测试（修复前基线对照，只有基线绿→修复后红才算本次回归）
+    //   (b) 新增行未声明标识符静态检查（专抓 s→sum 这类拼写漂移）
+    // 拦截即回滚不提交；无可用证据时记 SKIP（杜绝"没验证却显示 PASS"）。
+    let semanticStatus = 'SKIPPED';
+    if (!skipSemantic) {
+      const semantic = runSemanticGuard(join(TITAN_ROOT, delta.file), {
+        root: TITAN_ROOT, testDir: SEMANTIC_TEST_DIR, diffText: scoped, baseline: semanticBaseline
+      });
+      semanticStatus = semantic.status;
+      for (const c of semantic.checks) console.log('  语义护栏', c.name, '=', c.status, ':', c.detail);
+      if (semantic.problems.length) {
+        console.log('❌ 语义护栏拦截:', semantic.problems.join(' ; '));
+        rollbackExecutorChanges(baseCommit, 'semantic');
+        cleanupOrphans(untrackedBefore, 'semantic');
+        results.push({ deltaId: delta.id, file: delta.file, status: 'FAIL', exitCode: 0, reason: 'semantic-guard: ' + semantic.problems.join(' ; '), semantic: semanticStatus });
+        allPass = false;
+        continue;
+      }
+    }
+
     // 验证通过，提交这次改动（add/commit 状态必须检查——静默失败会产生"PASS 但没提交"的假证据）
     // P-18：提交消息带 dispatchId 前缀，skip 检查同缀匹配，跨 dispatch 撞号免疫。
     const commitMsg = `[${dispatchId}][${delta.id}] fix: ${delta.finding.slice(0, 60)}`;
@@ -636,7 +733,7 @@ PROOF: ${delta.file}:<行号>: <该行原文片段（逐字，>=8 字符）>
     baseCommit = newBase;
 
     // 验证通过，结果已提交
-    results.push({ deltaId: delta.id, file: delta.file, status: 'PASS', exitCode: 0 });
+    results.push({ deltaId: delta.id, file: delta.file, status: 'PASS', exitCode: 0, semantic: semanticStatus });
     console.log('✅', delta.id, 'PASS');
   }
 }
@@ -653,7 +750,7 @@ process.exit(finalExit);
 function writeResult(dispatchId, executor, deltas, verifyStatus, gitDiff, exitCode) {
   const result = {
     dispatchId,
-    deltas: deltas.map(d => ({ deltaId: d.deltaId || d.id, file: d.file, finding: d.finding, action: d.action, status: d.status, reason: d.reason })),
+    deltas: deltas.map(d => ({ deltaId: d.deltaId || d.id, file: d.file, finding: d.finding, action: d.action, status: d.status, reason: d.reason, semantic: d.semantic || null })),
     executor,
     verifyStatus,
     gitDiff: '',

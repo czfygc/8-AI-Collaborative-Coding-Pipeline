@@ -109,7 +109,7 @@ todo → claimed → ready → in_progress → verifying → done
 | 文件 | 唯一写者 | 说明 |
 |---|---|---|
 | orchestrator/work-orders.json（工单队列，按 M5 归 orchestrator/ 不放根目录） | autopilot | 队列状态唯一写者 |
-| 内部任务台账 | Director/人 | 只记批次级 T-xx；客户端只在认领时写自己的条目 |
+| ISSUE_REGISTRY.json | Director/人 | 只记批次级 T-xx；客户端只在认领时写自己的条目 |
 | 门禁白名单（verify-baseline*.mjs 等） | feat 分支流程 | 任何改动必须走 A′ 式分支+硬度矩阵 |
 | adapters.json | 合同流程（步3/步6） | 运行时不改 |
 | reviews/** 产物 | dispatch 流程 | G12：timestamp churn 不入库 |

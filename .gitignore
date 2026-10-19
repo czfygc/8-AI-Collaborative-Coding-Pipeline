@@ -1,28 +1,85 @@
-# Secret boundary — never track secret files.
+# Secret boundary — NEVER track secret files.
+# titan_secrets.env MUST remain outside Git (execution order §15).
 **/titan_secrets.env
 titan_secrets.env
+%USERPROFILE%/titan/titan_secrets.env
 
-# Runtime / regenerable
-node_modules/
-*.log
-.DS_Store
+# Python artifacts
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 
-# Local CDP browser profile (runtime data, keeps logins - never tracked)
-chrome-cdp-profile/
+# P1-A generated run outputs (evidence artifacts are produced, not committed here)
+P1_A/output/RUN-*/
 
-# TITAN orchestrator runtime data (autopilot artifacts, gate sandbox, lock files)
-orchestrator/audit-evidence/
+# Local scratch
+_tmp_*
+
+# Plugin local dependency links and imported session archives
+plugins/*/node_modules/
+.session-import/
+
+# --- Shared-workspace runtime data (large / regenerable, 2026-09-29) ---
+node_modules/
+chrome-cdp-profile/
+.dsh-tmp-cache/
+.dsh-tmp-pack/
+.dsh-tmp-pnpm-store/
+
+# HARNESS browser runtime: profile backups, chrome binary copies, live profiles
+HARNESS/browser/profile-backups/
+HARNESS/browser/chrome-cdp-copy/
+HARNESS/browser/profiles/
+HARNESS/browser/data/
+HARNESS/browser/cache/
+HARNESS/browser/diag-profiles/
+# R-06: 浏览器证据含 PII/会话痕迹，不得入库（Phase F 前强制脱敏）
+HARNESS/browser/evidence/
+
+# TITAN orchestrator runtime logs (regenerable)
 orchestrator/logs/
-tmp/
+
+# T-06 计划2: FreeLLMAPI 本地部署（嵌套三方仓库，含明文密钥配置，绝不入库）
+freellmapi-src/
+
+# M7 安全底线：freellmapi .env 含密钥（Director 2026-10-02 即时动作）
+freellmapi/.env
+
+# TITAN autopilot 运行时产物（每次重跑再生，不入库）
+orchestrator/audit-evidence/autopilot/fixer-logs/
+orchestrator/audit-evidence/autopilot/round-*.json
+orchestrator/audit-evidence/autopilot/verify-*.json
+
+# verify-gate meta 测试沙箱（测试自建自清理，勿入库）
+tmp/gate-meta/
+
+# 单写者文件锁（lib/lock.mjs 运行时锁，持有期间存在，勿入库）
 orchestrator/work-orders.json.lock
 orchestrator/*.write.lock
 orchestrator/work-orders.json.tmp
 
-# Local runtime review data (autopilot counters, review artifacts)
-reviews/
+# bin/ 代理与订阅管理（只入库源码与记录，运行时产物/二进制不入库）
+bin/*
+!bin/*.py
+!bin/*.md
+!bin/*.bat
+!bin/*.json.example
+!bin/*.html
+!bin/*.ps1
 
-# Local scratch
-_tmp_*
+.playwright-mcp/
+
+# T-104 证据大二进制：zip/exe/bak 只留盘不入库（GitHub release 可按 checksums 重下核验）
+archive/evidence/**/*.zip
+archive/evidence/**/*.exe
+archive/evidence/**/*.bak*
+
+# dsh-our-free-model v2.1.0（2026-10-13 Cline 安装）：嵌套三方仓库，不入库（官方源 github.com/Ebony-Vinyl/dsh-our-free-model @ ddb451c）
+vendor/dsh-our-free-model/
+
+# executor/cline 运行时 data-dir（含 providers.json 的 key，防误入库；T-59 2026-10-14）
+tmp/cline-data/
+tmp/ofm-cline-datadir/
+tmp/ofm-m4-clinedir/
+tmp/ofm-anyrouter/hdr.txt
