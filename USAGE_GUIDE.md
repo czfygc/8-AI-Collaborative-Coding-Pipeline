@@ -103,6 +103,27 @@ Example: "I want a pet adoption mini-app."
 - **You need basic computer skills**: install software, unzip, open a terminal, register accounts — all learnable in 10 minutes
 - **Code quality**: goes through an eight-party review, but in Alpha we still recommend you (or someone technical you trust) review before putting it into production
 
+## 8. Advanced (optional): send commands from Telegram on your phone
+
+Prefer not to be at your desk? Message your own Telegram bot and the pipeline runs for you:
+
+1. In Telegram, open **@BotFather**, send `/newbot` to create a bot, and copy its token (looks like `123456789:AA...`).
+2. Put the token in `titan_secrets.env` in the project root (this file is git-ignored and never uploaded):
+   `TITAN_BOT_TOKEN=your-token-here`
+3. Look up your own numeric Telegram user ID (any "get id" bot works) and put it in `TITAN_ALLOWED_USER_IDS` inside `orchestrator/start-titan-bot.ps1`. **Use only your own ID** — anyone not on the allow-list is refused; that is the security baseline.
+4. Make sure the "browser driver" from step 4 is still running, then in a terminal run:
+   `powershell -File orchestrator\start-titan-bot.ps1`
+5. Back in Telegram, send your bot one message:
+   `!titan hello, this is a link self-check`
+6. The bot replies **first** with "task received", then a few minutes later sends the execution status back (DispatchId, exit code, result summary).
+
+Notes:
+
+- **You need Python 3 installed first** (download from <https://www.python.org/downloads/> on Windows, and tick "Add python.exe to PATH") — steps 1–7 of this guide don't need it, only this section does
+- The prefix must be `!titan ` (exclamation mark **and** the space), otherwise the bot only answers with usage help
+- Don't send messages too fast (about 10 per minute at most), or Telegram will rate-limit — or ban the bot
+- To stop: end that `python` process. On restart, messages queued while it was down are skipped automatically
+
 ---
 
 *Questions or suggestions? Open an Issue on this repository.*

@@ -110,7 +110,11 @@ Expected: `verify-gate.mjs` exits with code `0`, `[GATE] RESULT: OK`. All base c
 | sing-box | Proxy and routing | <https://github.com/SagerNet/sing-box> |
 | OpenClaw | Human-computer language interaction (mobile: Telegram, WhatsApp, …) | <https://github.com/openclaw/openclaw> |
 
-`orchestrator/` interacts with the integrated tools (FreeLLMAPI, sing-box) via standard HTTP/gRPC interfaces. OpenClaw is an external open-source project for human-computer language interaction — **on the roadmap, not yet integrated** in this release. When integrated, it will be the **mobile entry point**: OpenClaw is a personal AI assistant that runs on your own device and meets you in the channels you already use (Telegram, WhatsApp, Discord, iMessage, … 20+ channels plus native mobile apps), so you can drive the pipeline from your phone in a TG conversation. Concrete configs stay local.
+`orchestrator/` interacts with the integrated tools (FreeLLMAPI, sing-box) via standard HTTP/gRPC interfaces.
+
+**Telegram entry (available in this release):** message your own Telegram bot with `!titan <your task>` and the pipeline answers in the same chat. The chain is `orchestrator/titan_telegram_bot.py` → local gateway `orchestrator/titan-gateway.mjs` (127.0.0.1:5301, allow-listed Telegram user IDs only) → `orchestrate.mjs --run` → web-AI seats → execution status returned to Telegram. Tokens live only in a local git-ignored `titan_secrets.env` (never in URLs or command lines), and the entry point only dispatches allow-listed tasks — it never hands out shell or repository-file access. Setup steps: `USAGE_GUIDE.md` section 8.
+
+OpenClaw is an external open-source project for human-computer language interaction — **on the roadmap, not yet integrated** in this release. When integrated, it will widen this mobile entry point: OpenClaw is a personal AI assistant that runs on your own device and meets you in the channels you already use (Telegram, WhatsApp, Discord, iMessage, … 20+ channels plus native mobile apps), so you can drive the pipeline from your phone in a TG conversation. Concrete configs stay local.
 
 ## Contributing
 

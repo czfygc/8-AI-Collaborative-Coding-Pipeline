@@ -109,7 +109,11 @@ node --test orchestrator/test/
 | sing-box | 代理与分流 | <https://github.com/SagerNet/sing-box> |
 | OpenClaw | 人机语言交互（手机端：Telegram、WhatsApp 等） | <https://github.com/openclaw/openclaw> |
 
-`orchestrator/` 通过标准 HTTP/gRPC 接口与已接入的 FreeLLMAPI / sing-box 交互。OpenClaw 是用于人机语言交互的外部开源项目——**本版本尚未集成，列入路线图**。集成后它将作为**手机端入口**：OpenClaw 是运行在你自己的设备上的个人 AI 助手，出现在你已用的聊天渠道里（Telegram、WhatsApp、Discord、iMessage 等 20+ 渠道 + 手机原生 App），因此可以从手机上用 TG 对话驱动流水线。具体配置留在本地。
+`orchestrator/` 通过标准 HTTP/gRPC 接口与已接入的 FreeLLMAPI / sing-box 交互。
+
+**Telegram 入口（本版本已可用）**：在 Telegram 里给自己的机器人发一条 `!titan <任务>`，流水线会在同一个会话里回你执行状态。链路是 `orchestrator/titan_telegram_bot.py` → 本地网关 `orchestrator/titan-gateway.mjs`（127.0.0.1:5301，仅放行白名单 Telegram 用户 ID）→ `orchestrate.mjs --run` → 网页 AI 席位 → 状态回传 Telegram。Token 只存在本地已 gitignore 的 `titan_secrets.env`（绝不进 URL、不进命令行），入口只派发白名单内的任务，**不提供 Shell 或仓库文件访问权**。配置步骤见 `USAGE_GUIDE.zh-CN.md` 第 8 节。
+
+OpenClaw 是用于人机语言交互的外部开源项目——**列入路线图，本版本尚未集成**。集成后它会把上面这个手机端入口扩展得更宽：OpenClaw 是运行在你自己的设备上的个人 AI 助手，出现在你已用的聊天渠道里（Telegram、WhatsApp、Discord、iMessage 等 20+ 渠道 + 手机原生 App），因此可以从手机上用 TG 对话驱动流水线。具体配置留在本地。
 
 ## 贡献
 

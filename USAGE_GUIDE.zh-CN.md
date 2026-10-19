@@ -103,6 +103,27 @@ npm install
 - **你需要基础操作能力**：能装软件、解压、开终端、注册账号——这些都能在 10 分钟学会
 - **代码质量**：会经过 8 方复核，但 Alpha 阶段仍建议你自己或找懂行的人过目后再上线使用
 
+## 8. 进阶（可选）：用手机上的 Telegram 发指令
+
+不想开电脑？可以直接在 Telegram 里给自己的机器人发一条消息来跑任务：
+
+1. 在 Telegram 里找 **@BotFather**，发 `/newbot` 创建机器人，拿到一串 token（形如 `123456789:AA...`）。
+2. 把 token 写进项目根目录的 `titan_secrets.env`（这个文件已被 git 忽略，不会被上传）：
+   `TITAN_BOT_TOKEN=你拿到的token`
+3. 查你自己的 Telegram 数字 ID（随便搜一个 "get id" 机器人即可），填进 `orchestrator/start-titan-bot.ps1` 里的 `TITAN_ALLOWED_USER_IDS`。**只填你自己的 ID**——不在名单里的人发指令会被直接拒绝，这是安全底线。
+4. 确认第 4 步的"浏览器司机"还开着，然后在终端运行：
+   `powershell -File orchestrator\start-titan-bot.ps1`
+5. 回到 Telegram，对你的机器人发一条：
+   `!titan 你好，这是一次链路自检`
+6. 机器人会**先**回一句"已收到任务"，几分钟后把执行状态发回来（含 DispatchId、退出码、结果摘要）。
+
+注意：
+
+- **需要先装 Python 3**（Windows 去 <https://www.python.org/downloads/> 下载安装，安装时勾上 "Add python.exe to PATH"）——这一步本指南前 7 节用不到，只有本节要用
+- 前缀必须是 `!titan `（感叹号 + 空格），否则机器人只回复用法提示
+- 发消息别太频繁（建议 10 条/分钟以内），否则 Telegram 会限流甚至封机器人
+- 停止：结束那个 `python` 进程即可；重新启动会自动跳过停机期间积压的旧消息
+
 ---
 
 *有任何问题或建议，欢迎到仓库 Issues 反馈。*
