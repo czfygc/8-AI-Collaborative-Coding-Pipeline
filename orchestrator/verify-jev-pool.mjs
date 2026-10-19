@@ -4,10 +4,12 @@
 //       3) reload 后的 witness 里 free 链不再把 mimo-flash 当免费主力
 // 退出码 0=PASS / 1=FAIL / 2=环境缺
 import { readFileSync, existsSync, statSync } from 'node:fs';
-const YML = 'C:/Users/Administrator/.dsh/profiles/web/plugins/jev-router/config/models.yaml';
+import { join } from 'node:path';
+const DSH = process.env.DSH_HOME || join(process.env.USERPROFILE || process.env.HOME || '', '.dsh');
+const YML = join(DSH, 'profiles', 'web', 'plugins', 'jev-router', 'config', 'models.yaml');
 const BAK = YML + '.bak-20261002-paid';
-const BUILD = 'C:/Users/Administrator/.dsh/logs/jev-router/build.log';
-const DISPATCH = 'C:/Users/Administrator/.dsh/logs/jev-router/dispatch.log';
+const BUILD = join(DSH, 'logs', 'jev-router', 'build.log');
+const DISPATCH = join(DSH, 'logs', 'jev-router', 'dispatch.log');
 let fail = 0;
 // 1) 磁盘分类
 try {

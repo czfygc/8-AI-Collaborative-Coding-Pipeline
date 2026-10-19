@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // witness-live.mjs — 实况显示"当前会话实际出战模型"（② 即用版）
-// 数据源：C:/Users/Administrator/.dsh/logs/jev-router/dispatch.log 的 WITNESS 行（派发后真相）。
+// 数据源：%USERPROFILE%\.dsh\logs\jev-router\dispatch.log 的 WITNESS 行（派发后真相）。
 // 用法: node orchestrator/witness-live.mjs [--session <sid>] [--follow] [--last N]
 // 设计说明（②完整版=让 dsh-agent 的 model-changed notice 用派发后模型，见
 //   audit-evidence/autopilot/routing-fix-20261002.md §② —— 需随应用重启生效，续5 实施）。
@@ -9,7 +9,8 @@ import { createInterface } from 'node:readline';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const LOG = 'C:/Users/Administrator/.dsh/logs/jev-router/dispatch.log';
+const DSH = process.env.DSH_HOME || join(process.env.USERPROFILE || process.env.HOME || '', '.dsh');
+const LOG = join(DSH, 'logs', 'jev-router', 'dispatch.log');
 const argv = process.argv.slice(2);
 const val = f => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : null; };
 const follow = argv.includes('--follow');
