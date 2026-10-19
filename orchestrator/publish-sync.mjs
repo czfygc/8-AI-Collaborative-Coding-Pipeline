@@ -212,12 +212,12 @@ export function writeLedger(localRoot, ledger) {
   return p;
 }
 
-function buildLedger(localRoot, pubDir, includeFiles, sourceCommit, sourceInferred) {
+function buildLedger(localRoot, pubDir, includeFiles, sourceCommit, sourceInferred, prev) {
   const files = listPublishedFiles(pubDir);
   const fp = fingerprint(pubDir, files);
   const remote = git(pubDir, ['remote', 'get-url', 'origin'], true);
   const branch = git(pubDir, ['rev-parse', '--abbrev-ref', 'HEAD'], true) || 'main';
-  return {
+  const base = {
     schemaVersion: 1,
     generatedBy: 'orchestrator/publish-sync.mjs',
     localRepo: localRoot.replace(/\\/g, '/'),
@@ -235,6 +235,13 @@ function buildLedger(localRoot, pubDir, includeFiles, sourceCommit, sourceInferr
     },
     note: '发布集 = 发布树已跟踪文件（不猜测）；新文件需显式 --include 才会发布。指纹用于检测发布树被手工改动。'
   };
+  // 保留旧账本里的附加字段（如 backlogAtInit），避免 apply 覆盖时丢元数据
+  if (prev && typeof prev === 'object') {
+    for (const k of Object.keys(prev)) {
+      if (!(k in base)) base[k] = prev[k];
+    }
+  }
+  return base;
 }
 
 // ------------------------------------------------------------------ 命令实现
@@ -379,9 +386,32 @@ function cmdApply(opts) {
   ];
   if (!targets.length && !drift.changedDenied.length) { console.log('无待同步内容。'); return 0; }
 
-  // 禁推剔除（prune）：已跟踪但属禁推清单 → git rm --cached（文件留在盘上，但从此不跟踪/不外发）
-  const pruned = [];
   const failed = [];
+  const copied = [];
+  const blocked = [];
+  for (const t of targets) {
+    const lp = join(localRoot, t.file);
+    const pp = join(pubDir, t.file);
+    if (!existsSync(lp)) { failed.push(t.file + ' (本地不存在)'); continue; }
+    const issues = secretScan(lp, t.file);
+    if (issues.length) { blocked.push(t.file + ' — ' + issues.join('; ')); continue; }
+    try {
+      mkdirSync(dirname(pp), { recursive: true });
+      copyFileSync(lp, pp);
+      const a = sha256File(lp);
+      const b = sha256File(pp);
+      if (a !== b) { failed.push(t.file + ' (复制后 sha256 不一致)'); continue; }
+      copied.push(t.file);
+      console.log('  [复制] ' + t.file);
+    } catch (e) {
+      failed.push(t.file + ' (' + e.message + ')');
+    }
+  }
+
+  // 禁推剔除（prune）：已跟踪但属禁推清单 → git rm --cached（文件留在盘上，但从此不跟踪/不外发）
+  // 必须放在复制之后：复制会覆盖发布树 .gitignore，若先剔除、后复制，ignore 登记会被冲掉，
+  // 随后 git add -A 又会把禁推文件重新加回（T-126 实证事故）。
+  const pruned = [];
   for (const f of drift.changedDenied) {
     try {
       git(pubDir, ['rm', '--cached', '--quiet', '--', f]);
@@ -404,27 +434,6 @@ function cmdApply(opts) {
     }
   }
   for (const f of deniedExplicit) console.log('  [拒收] ' + f + ' — 禁推清单拒绝 --include');
-
-  const copied = [];
-  const blocked = [];
-  for (const t of targets) {
-    const lp = join(localRoot, t.file);
-    const pp = join(pubDir, t.file);
-    if (!existsSync(lp)) { failed.push(t.file + ' (本地不存在)'); continue; }
-    const issues = secretScan(lp, t.file);
-    if (issues.length) { blocked.push(t.file + ' — ' + issues.join('; ')); continue; }
-    try {
-      mkdirSync(dirname(pp), { recursive: true });
-      copyFileSync(lp, pp);
-      const a = sha256File(lp);
-      const b = sha256File(pp);
-      if (a !== b) { failed.push(t.file + ' (复制后 sha256 不一致)'); continue; }
-      copied.push(t.file);
-      console.log('  [复制] ' + t.file);
-    } catch (e) {
-      failed.push(t.file + ' (' + e.message + ')');
-    }
-  }
   for (const b of blocked) console.log('  [拦截] ' + b);
   for (const f of failed) console.log('  [失败] ' + f);
   if (!copied.length && !pruned.length) {
@@ -447,8 +456,9 @@ function cmdApply(opts) {
   writeFileSync(join(pubDir, MANIFEST_NAME), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
   console.log('  [标记] ' + MANIFEST_NAME);
 
-  // 本地账本
-  const newLedger = buildLedger(localRoot, pubDir, copied, srcCommit, false);
+  // 本地账本：来源提交 = 本次同步对应的本地 HEAD（不是漂移锚点）
+  const newSourceCommit = git(localRoot, ['rev-parse', 'HEAD'], true);
+  const newLedger = buildLedger(localRoot, pubDir, copied, newSourceCommit, false, ledger);
   newLedger.lastSync.at = new Date().toISOString();
   newLedger.lastSync.syncedFiles = copied.length;
   newLedger.lastSync.syncedFileList = copied;
@@ -462,7 +472,9 @@ function cmdApply(opts) {
     git(pubDir, ['commit', '-m', msg]);
     console.log('  [提交] ' + msg);
     newLedger.lastSync.publishedCommit = git(pubDir, ['rev-parse', 'HEAD'], true);
-    newLedger.lastSync.publishedFingerprint = fingerprint(pubDir, listPublishedFiles(pubDir)).sha256;
+    const postFp = fingerprint(pubDir, listPublishedFiles(pubDir));
+    newLedger.lastSync.publishedFingerprint = postFp.sha256;
+    newLedger.lastSync.publishedFiles = postFp.fileCount;
     writeLedger(localRoot, newLedger);
     if (opts.push) {
       git(pubDir, ['push', 'origin', newLedger.publishBranch || 'main']);
