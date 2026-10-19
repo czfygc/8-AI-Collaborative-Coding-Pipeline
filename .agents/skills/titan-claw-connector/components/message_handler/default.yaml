@@ -1,0 +1,4 @@
+name: titan-message-handler
+description: Listens for Telegram !titan <task> commands and forwards to TITAN gateway
+events:
+  - normal_message
