@@ -123,4 +123,4 @@ node --test orchestrator/test/
 
 ---
 
-*维护者：TITAN_ARCHAEOLOGY <titan@archaeology.local>（化名，不暴露个人身份）*
+*维护者：TITAN_ARCHAEOLOGY（化名，不暴露个人身份）。联系方式：本仓库 GitHub Issues。*

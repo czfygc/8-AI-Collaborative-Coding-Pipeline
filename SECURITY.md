@@ -4,8 +4,10 @@
 
 You can report security vulnerabilities through either of the following channels:
 
-- GitHub Private Vulnerability Reporting (PVR): go to repository Settings -> Security -> Report a vulnerability (**must be tested externally before public launch**, see R-03)
-- Email: titan@archaeology.local (internal pseudonym email; external reachability is verified via GitHub PVR testing, see R-03)
+- **GitHub Private Vulnerability Reporting (PVR)** (preferred): go to the repository **Security** tab -> **Report a vulnerability**. The advisory is delivered privately to maintainers.
+- **GitHub Issues**: open an issue with a `[security]` prefix for non-sensitive reports only. Never post exploit details in a public issue.
+
+Maintainers are notified through the project's GitHub account for both channels; no email contact is published on purpose.
 
 We will confirm receipt as soon as possible and prioritize by severity.
 

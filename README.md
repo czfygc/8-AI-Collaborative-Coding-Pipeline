@@ -124,4 +124,4 @@ Licensed under **Apache-2.0** (permissive, patent grant, enterprise-friendly). S
 
 ---
 
-*Maintainer: TITAN_ARCHAEOLOGY <titan@archaeology.local> (pseudonym, does not expose personal identity)*
+*Maintainer: TITAN_ARCHAEOLOGY (pseudonym, does not expose personal identity). Contact via GitHub Issues on this repository.*
