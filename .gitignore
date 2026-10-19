@@ -10,6 +10,9 @@ __pycache__/
 *.py[cod]
 .venv/
 
+# Local CDP browser profile (runtime data, keeps logins - never tracked)
+chrome-cdp-profile/
+
 # TITAN orchestrator runtime data (autopilot artifacts, gate sandbox, lock files)
 orchestrator/audit-evidence/
 orchestrator/logs/

@@ -73,6 +73,8 @@ Only `npm install` is required for the checks below. A CDP browser is **only** n
 
 ## Quick Start
 
+> **Not a programmer? Start here: [Usage Guide (English)](USAGE_GUIDE.md) / [使用说明（中文）](USAGE_GUIDE.zh-CN.md)** — a step-by-step walkthrough from install to your first shipped project, without writing code.
+
 ```powershell
 # 1. Syntax check (all .mjs files)
 node --check orchestrator/orchestrate.mjs

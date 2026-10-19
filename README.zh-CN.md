@@ -72,6 +72,8 @@ npm install
 
 ## 快速开始
 
+> **不懂代码？从这里开始：[使用说明（中文）](USAGE_GUIDE.zh-CN.md) / [Usage Guide (English)](USAGE_GUIDE.md)** —— 从安装到做出第一个项目，全步骤讲解，无需写代码。
+
 ```powershell
 # 1. 语法检查（全库 .mjs）
 node --check orchestrator/orchestrate.mjs
