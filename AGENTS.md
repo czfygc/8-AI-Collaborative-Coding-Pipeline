@@ -119,5 +119,6 @@
 - **dsh-ops-bridge**：`dsh-ops-bridge/server.mjs`（零依赖 MCP stdio），6 工具 `ops_inspect` / `ops_grep` / `ops_glob` / `ops_replace` / `ops_pdf_text` / `ops_html2md`——把 dsh-ops 的 Rust worker 工具 + pdf/html2md 桥接给 OpenCode/Cline/Kilo 三客户端（Harness 用原生 DSH 插件无需桥接）。接线同 titan-memory（三客户端 mcp 段加 `dsh-ops`）。
 - **实战落盘义务**：每次实战操作收尾前，把可复用要点与踩坑用 `titan_memory_remember` 落盘（事实/决定类，≤2000 字，打关键词标签）——与 M1 第 2 步构成闭环：**开工必 recall，收尾必 remember**。
 - **发布树同步账本（T-125）**：`PUBLISH_SYNC.json`（本地仓根目录，四客户端共读）记录发布树路径/远端/上次同步的发布提交、来源本地提交、文件数与内容指纹（sha256）。**想知道"该从哪开始更新发布树"，只跑一条命令**：`node orchestrator/publish-sync.mjs status` → 打印待同步清单（改了什么/新增了什么）、未发布的本地提交数、发布树是否被手工改动过、下一步命令；`plan` 只看清单、`apply --yes` 执行同步（默认不推送）、`verify` 校验指纹。发布集 = 发布树已跟踪文件（不按目录猜测），新文件必须显式 `--include`；工具内置密钥扫描（`titan_secrets.env`/AIza/ghp_/sk-/私钥等）命中即拦截不发布。
+- **禁推政策（T-126，用户拍板）**：**必同步 = V2 流水线完整逻辑链（脱敏后）；禁同步 = 与 V2 无关的 + 与 V2 有关但非必需的**。禁推清单写死在 `orchestrator/publish-sync.mjs` 的 `NEVER_PUBLISH`（含 `ISSUE_REGISTRY.json` 类台账、实例记忆 `titan-memory/core/CORE.md`、内部 SOP 技能自身、`*.log`、本地专属目录）；apply 会**自动剔除**已跟踪的禁推文件（`git rm --cached` + 登记 `.git/info/exclude`），`--include` 指定禁推文件会被拒收。判定口诀："这是 V2 流水线跑起来必需的逻辑链吗？"
 
 **V2 流水线开源**：`OPEN_SOURCE_PREP_PLAN.md`（Phase A 本地就绪，未 push，等用户批准）。目标=把 `D:\TITAN_ARCHAEOLOGY` 的四客户端共用仓库做成可开源的工具栈。Phase A-D 已提交，M4 交叉验证 PASS。
