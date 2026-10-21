@@ -19,6 +19,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { readDoc, writeDoc, listActive, CONFIG } from './store.mjs';
+import { appendCodingFact, appendDiffEntry } from './chain-store.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WS = process.cwd();
@@ -142,8 +143,8 @@ async function main() {
 		process.stdout.write('\ntools/list\n');
 		const listed = await client.request('tools/list');
 		const names = (listed.tools ?? []).map((t) => t.name).sort();
-		ok('exposes exactly 6 tools',
-			JSON.stringify(names) === JSON.stringify(['memory_consolidate', 'memory_core_recall', 'memory_core_remember', 'memory_recall', 'memory_remember', 'memory_search']),
+		ok('exposes exactly 7 tools',
+			JSON.stringify(names) === JSON.stringify(['memory_coding_recall', 'memory_consolidate', 'memory_core_recall', 'memory_core_remember', 'memory_recall', 'memory_remember', 'memory_search']),
 			JSON.stringify(names));
 		for (const tool of listed.tools ?? []) {
 			ok(`  ${tool.name} has description`, typeof tool.description === 'string' && tool.description.length > 40);
@@ -258,6 +259,46 @@ async function main() {
 			() => ok('unknown method rejected', false, 'resolved instead of rejecting'),
 			() => ok('unknown method rejected', true)
 		);
+
+		// T-150 coding chain: the fact carries coordinates only; the diff body
+		// lives in the content-addressed chain store and is returned only when
+		// the caller explicitly asks for it.
+		process.stdout.write('\ncoding memory chain (T-150)\n');
+		const chainFact = appendCodingFact(
+			{ file: 'src/selftest.ts', function: 'runSelftest', branch: 'main' },
+			{ summary: 'selftest coding fact', ws: WS }
+		);
+		const chainDiff = appendDiffEntry(
+			'--- a/src/selftest.ts\n+++ b/src/selftest.ts\n@@\n-old\n+new\n',
+			{ file: 'src/selftest.ts', function: 'runSelftest', branch: 'main' },
+			{ summary: 'selftest diff', ref: 'git:selftest' },
+			{ ws: WS }
+		);
+		const chainHit = await client.request('tools/call', {
+			name: 'memory_coding_recall',
+			arguments: { fact_id: chainFact.id }
+		});
+		ok('coding recall not an error', chainHit.isError !== true, JSON.stringify(chainHit).slice(0, 200));
+		const chainText = chainHit.content?.[0]?.text ?? '';
+		let chainBlockJson = {};
+		try { chainBlockJson = JSON.parse(chainText); } catch { /* keep empty */ }
+		ok('coding recall returns coordinates', chainBlockJson?.fact?.coordinates?.file === 'src/selftest.ts', chainText.slice(0, 200));
+		ok('coding recall returns diff reference', chainBlockJson?.diffs?.[0]?.hash === chainDiff.hash, chainText.slice(0, 200));
+		ok('coding recall hides diff body by default',
+			!chainText.includes('@@') && chainBlockJson?.bodies === undefined, chainText.slice(0, 200));
+		const chainBodies = await client.request('tools/call', {
+			name: 'memory_coding_recall',
+			arguments: { fact_id: chainFact.id, include_bodies: true }
+		});
+		const bodiesText = chainBodies.content?.[0]?.text ?? '';
+		ok('coding recall returns body only when asked', bodiesText.includes('@@'), bodiesText.slice(0, 200));
+		const chainMiss = await client.request('tools/call', {
+			name: 'memory_coding_recall',
+			arguments: { fact_id: 'no-such-coding-fact' }
+		});
+		ok('coding recall missing fact is an error result (not a crash)',
+			chainMiss.isError === true && /not found|MEMORY_NOT_FOUND/i.test(chainMiss.content?.[0]?.text ?? ''),
+			JSON.stringify(chainMiss).slice(0, 200));
 	} finally {
 		await client.stop();
 		if (client.stderr.trim().length > 0) {

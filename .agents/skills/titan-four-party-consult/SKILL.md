@@ -3,6 +3,10 @@ name: titan-four-party-consult
 description: "Use when the user says '4 会诊' / '四方会诊' / 'four-party consult' / 'multi-review dispatch' / 'cross-model review', or when a TITAN artifact (report, code, spec, decision) needs independent cross-model review. Dispatches to three independent reviewers (Gemini / DeepSeek / Qwen) via CDP, preserves raw findings losslessly (Layer A), detects conflicts and blind spots, produces architect-grade decision input (Layer B / delta.md), which is then consumed by ChatGPT as the fourth party (Research Architect). Protocol-driven; reviewers and perspectives configurable via reviewers.yaml."
 user-invocable: true
 model-invocable: true
+version: 1.0.0
+requires: cdp-browser-9222, reviewers.yaml
+tests: manual: 对一份 fixture 报告跑四席会诊并检查 delta.md
+provenance: original
 ---
 
 # TITAN 4 方会诊协议 (Four-Party Consult)

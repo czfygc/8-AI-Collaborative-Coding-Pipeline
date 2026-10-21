@@ -9,6 +9,9 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, resolve as resolvePath } from 'node:path';
 import { createHash } from 'node:crypto';
+import { scanInput, summarizeFindings } from './lib/input-integrity.mjs';
+import { createLedger, newRunId, EVENT_TYPES } from './lib/run-events.mjs';
+import { buildIntent, writeIntentFile } from './lib/intent.mjs';
 
 const TITAN_ROOT = resolvePath(process.env.TITAN_ROOT || 'D:\\TITAN_ARCHAEOLOGY');
 const ORCHESTRATE = join(TITAN_ROOT, 'orchestrator', 'orchestrate.mjs');
@@ -16,6 +19,8 @@ const PORT = Number(process.env.TITAN_GATEWAY_PORT || 5301);
 const ALLOWED_RAW = process.env.TITAN_ALLOWED_USER_IDS || '';
 const ALLOWED = new Set(ALLOWED_RAW.split(',').map(s => s.trim()).filter(Boolean));
 const NODE = process.env.NODE_EXECUTABLE || 'node';
+// T-153：每次 /task 请求一条 run 事件链（run.start → task.end / run.error）
+const ledger = createLedger();
 
 // 日志
 function log(...args) {
@@ -39,6 +44,9 @@ function isAllowed(userId) {
 
 // 运行 TITAN 编排器，返回 { ok, dispatchId, summary, stderr }
 function runTitanTask({ artifactPath, prompt, userId, trigger, mode, filePath }) {
+  if (mode === 'codegen' && prompt) {
+    return runCodegen({ prompt, userId, trigger });
+  }
   const args = [];
   let timeoutMs = 900000; // 15 分钟：run 咨询 4 席并行 capture 实测 254s/3席，4 席贴 300s 会 ETIMEDOUT（T-122 e2e 实证）
   if (mode === 'scan' && filePath) {
@@ -147,6 +155,37 @@ function runTitanTask({ artifactPath, prompt, userId, trigger, mode, filePath })
   };
 }
 
+function runCodegen({ prompt, userId, trigger }) {
+  const codegenPath = join(TITAN_ROOT, 'orchestrator', 'titan-codegen.mjs');
+  if (!existsSync(codegenPath)) {
+    return { ok: false, dispatchId: null, summary: 'titan-codegen.mjs 不存在', stderr: '' };
+  }
+  const res = spawnSync(NODE, [codegenPath, prompt], {
+    cwd: TITAN_ROOT, encoding: 'utf8', timeout: 900000, maxBuffer: 10 * 1024 * 1024,
+  });
+  if (res.error) {
+    return { ok: false, dispatchId: null, summary: 'codegen spawn error: ' + res.error.message, stderr: res.error.message };
+  }
+  const out = res.stdout || '';
+  const vM = out.match(/\[CODEGEN\]\s*verdict=(PASS|FAIL)/i);
+  const fM = out.match(/\[CODEGEN\]\s*files=(.+)/i);
+  const sM = out.match(/\[CODEGEN\]\s*summary=(.+)/i);
+  const pM = out.match(/\[CODEGEN\]\s*proposal_id=(\S+)/i);
+  const verdict = vM ? vM[1].toUpperCase() : 'FAIL';
+  const files = fM ? fM[1].split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const summary = sM ? sM[1] : (out.slice(0, 2000));
+  return {
+    ok: verdict === 'PASS',
+    dispatchId: null,
+    summary: (verdict === 'PASS' ? summary + '\n（等待用户回「提交」才会 commit）' : summary),
+    stderr: res.stderr || '',
+    exitCode: res.status,
+    files,
+    verdict,
+    proposalId: pM ? pM[1] : null,
+  };
+}
+
 // 处理请求
 function handleRequest(req, res) {
   const { pathname } = new URL(req.url, 'http://localhost');
@@ -185,8 +224,53 @@ function handleRequest(req, res) {
         return;
       }
 
-      const { prompt, artifact_path, trigger, mode, file_path } = parsed;
-      const result = runTitanTask({ artifactPath: artifact_path, prompt, userId, trigger, mode, filePath: file_path });
+      const { prompt, artifact_path, trigger, mode, file_path, intent, reply_channel } = parsed;
+      // T-153：run 事件链（run.start → task.end / run.error）——事后可回放这次请求发生了什么
+      const runId = newRunId('gw');
+      ledger.append(runId, EVENT_TYPES.RUN_START, { mode: mode || 'auto', trigger: trigger || null, user_id: userId, has_prompt: !!prompt });
+      // T-166（R6）：意图落盘 reviews/_pending/intent-<ts>.json（审计面；失败不阻断主链）
+      let intentFile = null;
+      if (typeof intent === 'string' && intent.trim()) {
+        try {
+          const obj = buildIntent({
+            intent: intent.trim(),
+            target: file_path || artifact_path || '',
+            constraints: prompt || '',
+            replyChannel: reply_channel || '',
+            runId,
+            source: 'telegram-bot',
+          });
+          intentFile = writeIntentFile(obj);
+        } catch (e) {
+          console.warn('[INTENT] 意图落盘失败（不阻断）: ' + (e && e.message ? e.message : String(e)));
+        }
+      }
+      // T-154 不可信输入完整性闸门：任务文本按不可信输入检测（隐藏文本/不可见字符/
+      // 指令形状行/隐藏链接）。**只报警不阻断**——命中不改变执行语义，只在响应里
+      // 附带 inputIntegrity 并写日志，由上游决定处置（红线：findings 不回显原文）。
+      let inputIntegrity = null;
+      if (typeof prompt === 'string' && prompt) {
+        const scan = scanInput(prompt);
+        if (!scan.ok) {
+          inputIntegrity = { ok: false, counts: scan.counts, summary: summarizeFindings(scan) };
+          console.warn('[INPUT-INTEGRITY] 任务文本命中完整性检查（不阻断）: ' + inputIntegrity.summary);
+        }
+      }
+      let result;
+      try {
+        result = runTitanTask({ artifactPath: artifact_path, prompt, userId, trigger, mode, filePath: file_path });
+      } catch (err) {
+        ledger.append(runId, EVENT_TYPES.RUN_ERROR, { message: String(err && err.message ? err.message : err).slice(0, 300) });
+        throw err;
+      }
+      ledger.append(runId, EVENT_TYPES.TASK_END, {
+        ok: !!result.ok,
+        exit_code: result.exitCode ?? null,
+        dispatch_id: result.dispatchId || null,
+        verdict: result.verdict || null,
+        proposal_id: result.proposalId || null,
+        summary_len: (result.summary || '').length,
+      });
 
       const status = result.ok ? 200 : 500;
       res.writeHead(status, { 'Content-Type': 'application/json', ...corsHeaders });
@@ -197,6 +281,10 @@ function handleRequest(req, res) {
         architectDecision: result.architectDecision,
         stderr: result.stderr,
         exitCode: result.exitCode,
+        runId,
+        ...(intentFile ? { intentFile } : {}),
+        ...(result.verdict ? { verdict: result.verdict, files: result.files || [], proposalId: result.proposalId || null } : {}),
+        ...(inputIntegrity ? { inputIntegrity } : {})
       }));
     });
     return;

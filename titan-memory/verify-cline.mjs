@@ -129,7 +129,7 @@ try {
 
 	const listed = await request('tools/list');
 	const names = (listed.tools ?? []).map((t) => t.name).sort();
-	ok('6 tools exposed', names.length === 6, JSON.stringify(names));
+	ok('7 tools exposed', names.length === 7, JSON.stringify(names));
 	ok('tool names are unprefixed (Cline prefixes with server name)', names.every((n) => n.startsWith('memory_')), JSON.stringify(names));
 	process.stdout.write(`  -> Cline will show these as: ${names.map((n) => `${name}_${n}`).join(', ')}\n`);
 

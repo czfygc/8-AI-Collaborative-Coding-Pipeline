@@ -23,6 +23,7 @@ import {
 	coreFilePath,
 	notesDirPath
 } from './core-store.mjs';
+import { recallCodingFact } from './chain-store.mjs';
 
 const SERVER_NAME = 'titan-memory';
 const SERVER_VERSION = '1.0.0';
@@ -99,8 +100,30 @@ const TOOLS = [
 			},
 			required: ['text']
 		}
+	},
+	{
+		name: 'memory_coding_recall',
+		description: 'T-150 coding memory chain (read-only): look up one coding fact by id and return its chain_block — the fact with coordinates + summary, the matched diff references (hash/summary/ref), and optionally the raw diff bodies. Coordinates match a diff entry so the chain connects code location to its diffs.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				fact_id: { type: 'string', description: 'Id of the coding fact to recall.' },
+				include_bodies: { type: 'boolean', description: 'When true, also include the raw diff body text for each diff entry (default false).' }
+			},
+			required: ['fact_id']
+		}
 	}
 ];
+
+// T-152 工具预算：core 档只暴露只读查询（recall / search / core_recall），
+// 隐藏写工具（memory_remember / memory_core_remember）与非常驻的 consolidate。
+// 档位由 env TITAN_TOOL_PROFILE 选择（core | full），默认 full = 行为完全不变。
+// 依据与清单见 config/tool-exposure.json；审计脚本 mcp-bridges/tools-audit.mjs。
+const TOOL_PROFILE = String(process.env.TITAN_TOOL_PROFILE || 'full').toLowerCase();
+const CORE_TOOLS = new Set(['memory_recall', 'memory_search', 'memory_core_recall']);
+const VISIBLE_TOOLS = TOOL_PROFILE === 'core'
+	? TOOLS.filter((tool) => CORE_TOOLS.has(tool.name))
+	: TOOLS;
 
 // ------------------------------------------------------------ tool execute
 
@@ -150,6 +173,28 @@ async function callTool(name, args) {
 		return `CORE.md + notes/ local keyword recall for ${JSON.stringify(String(query))}:\n\n${sections.join('\n')}`;
 	}
 
+	// T-150 coding memory chain (read-only): look up one coding fact and hand
+	// back its chain_block. The prototype store is a PRIVATE tree under
+	// <ws>/titan-memory/chain-data/ — it never touches the shared fact store.
+	if (name === 'memory_coding_recall') {
+		const input = args ?? {};
+		const factId = String(input.fact_id ?? '').trim();
+		if (factId.length === 0) {
+			throw new MemoryError('MEMORY_INVALID_ARGS', 'memory_coding_recall: fact_id must not be empty');
+		}
+		const withBodies = input.include_bodies === true;
+		let block;
+		try {
+			block = recallCodingFact(factId, { ws, withBodies });
+		} catch (error) {
+			// Same convention as every other missing fact in this server: a
+			// MEMORY_NOT_FOUND tool result, never a protocol-level failure.
+			if (!/no coding fact with id/.test(String(error?.message ?? ''))) throw error;
+			throw new MemoryError('MEMORY_NOT_FOUND', `memory_coding_recall: coding fact '${factId}' not found in this workspace`);
+		}
+		return JSON.stringify(chainBlock(block, withBodies), null, 2);
+	}
+
 	if (name === 'memory_core_remember') {
 		const input = args ?? {};
 		const text = String(input.text ?? '');
@@ -165,6 +210,38 @@ async function callTool(name, args) {
 	}
 
 	throw new MemoryError('MEMORY_INVALID_ARGS', `unknown tool ${JSON.stringify(name)}`);
+}
+
+// Project the prototype's chain_block onto the wire shape: the fact with its
+// coordinates + summary, the diff references matched by coordinate, and — only
+// when the caller explicitly asked — the raw diff bodies. The body never
+// rides along with the fact; it is fetched by hash on request.
+function chainBlock(block, withBodies) {
+	const fact = block?.fact ?? {};
+	const out = {
+		fact: {
+			id: fact.id ?? '',
+			coordinates: {
+				file: fact.coordinates?.file ?? '',
+				function: fact.coordinates?.function ?? '',
+				branch: fact.coordinates?.branch ?? ''
+			},
+			summary: fact.summary ?? '',
+			createdAt: fact.createdAt ?? null
+		},
+		diffs: (block?.diffs ?? []).map((diff) => ({
+			hash: diff.hash,
+			summary: diff.summary,
+			ref: diff.ref
+		}))
+	};
+	if (withBodies) {
+		out.bodies = (block?.bodies ?? []).map((body) => ({
+			hash: body.hash,
+			body: body.body
+		}));
+	}
+	return out;
 }
 
 function toolResult(text, isError = false) {
@@ -214,7 +291,7 @@ async function dispatch(message) {
 			reply(id, {});
 			return;
 		case 'tools/list':
-			reply(id, { tools: TOOLS });
+			reply(id, { tools: VISIBLE_TOOLS });
 			return;
 		case 'tools/call': {
 			const name = params?.name;

@@ -51,11 +51,16 @@ DEDUP_WINDOW = 30  # 秒：同 chat 同文案在此窗口内只回一次
 CONSULT_PREFIXES = ("咨询", "问一下", "帮我看看")
 EXECUTE_PREFIXES = ("执行", "落地", "审阅")
 EXECUTE_KEYWORDS = ("改代码", "修bug", "修 bug", "修复", "修改", "写代码", "实现", "重构", "落地")
+CODEGEN_PREFIXES = ("生成", "写新", "新建代码", "从零生成", "新代码")
+CODEGEN_KEYWORDS = ("生成新代码", "新代码", "新建", "从零写", "零代码", "新功能")
+# T-166（R6）：机器人三档模式 → intent schema 枚举（consult/fix/implement；与网关 lib/intent.mjs 同表）
+MODE_TO_INTENT = {"consult": "consult", "execute": "fix", "codegen": "implement"}
 FILE_TOKEN_RE = re.compile(r"[\w./\\\-]+\.\w{1,4}")
 SKIP_DIRS = {".git", "node_modules", ".venv", "__pycache__", "chrome-cdp-profile",
              ".dsh-tmp-cache", ".dsh-tmp-pack", ".dsh-tmp-pnpm-store", "archive",
              "freellmapi-src", "test-projects", "HARNESS", "_session-import"}
 PENDING_EXECUTE = {}  # chat_id -> 待补文件的落地任务原文
+PENDING_CODEGEN = {}  # chat_id -> 待用户确认的代码生成任务
 
 if not TG_BOT_TOKEN:
     print("[FATAL] 请设置 TITAN_BOT_TOKEN 环境变量", file=sys.stderr)
@@ -129,15 +134,21 @@ def tg_send_message(chat_id, text, dedup=False):
     return None
 
 
-def titan_dispatch(task, user_id):
-    """将任务提交给 TITAN 网关，返回结果文本"""
-    payload = json.dumps(
-        {
-            "prompt": task,
-            "user_id": str(user_id),
-            "trigger": "titan-telegram-bot",
-        }
-    ).encode("utf-8")
+def titan_dispatch_json(task, user_id, mode=None, intent=None, reply_channel=None):
+    """提交任务给 TITAN 网关，返回网关原始 JSON（失败时返回 {'ok': False, ...}）。"""
+    payload = {
+        "prompt": task,
+        "user_id": str(user_id),
+        "trigger": "titan-telegram-bot",
+    }
+    if mode:
+        payload["mode"] = mode
+    # T-166（R6）：意图随请求下发，网关落 reviews/_pending/intent-<ts>.json（审计面）。
+    if intent:
+        payload["intent"] = intent
+    if reply_channel:
+        payload["reply_channel"] = str(reply_channel)
+    payload = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         TITAN_GATEWAY_URL,
         data=payload,
@@ -148,14 +159,19 @@ def titan_dispatch(task, user_id):
         # 20 分钟 > 网关 15 分钟：run 咨询 4 席并行 capture 实测可超 5 分钟（T-122）
         with urllib.request.urlopen(req, timeout=1200) as resp:
             body = resp.read().decode("utf-8")
-            data = json.loads(body)
+            return json.loads(body)
     except urllib.error.HTTPError as e:
-        return f"TITAN 网关 HTTP {e.code}: {e.read().decode('utf-8', 'ignore')[:200]}"
+        return {"ok": False, "error": f"TITAN 网关 HTTP {e.code}: {e.read().decode('utf-8', 'ignore')[:200]}"}
     except Exception as e:
-        return f"TITAN 网关请求失败: {str(e)[:200]}"
+        return {"ok": False, "error": f"TITAN 网关请求失败: {str(e)[:200]}"}
+
+
+def titan_dispatch(task, user_id, mode=None, intent=None, reply_channel=None):
+    """将任务提交给 TITAN 网关，返回结果文本"""
+    data = titan_dispatch_json(task, user_id, mode, intent, reply_channel)
 
     if not data.get("ok"):
-        return f"TITAN 任务失败: {data.get('stderr') or data.get('summary') or '未知错误'}"
+        return f"TITAN 任务失败: {data.get('stderr') or data.get('summary') or data.get('error') or '未知错误'}"
 
     lines = [
         "TITAN 任务已分发",
@@ -163,10 +179,108 @@ def titan_dispatch(task, user_id):
         f"ExitCode: {data.get('exitCode')}",
     ]
     if data.get("summary"):
-        lines.append(f"结果摘要: {str(data.get('summary'))[:3500]}")
+        lines.append(f"结果摘要: {str(data.get('summary') or '')[:3500]}")
     if data.get("architectDecision"):
-        lines.append(f"架构师裁决: {str(data.get('architectDecision'))[:200]}")
+        lines.append(f"架构师裁决: {str(data.get('architectDecision') or '')[:200]}")
     return chr(10).join(lines)
+
+
+def _node_bin():
+    return os.environ.get("TITAN_NODE_BIN") or "node"
+
+
+def _run_gate(args, timeout=300):
+    """调用通用写闸 CLI（orchestrator/run-gate.mjs）。"""
+    cmd = [_node_bin(), os.path.join(TITAN_ROOT, "orchestrator", "run-gate.mjs")] + list(args)
+    return subprocess.run(cmd, cwd=TITAN_ROOT, capture_output=True, text=True, timeout=timeout)
+
+
+def handle_codegen(chat_id, user_id, task):
+    """T-156/T-153：从零生成新代码 → 登记「提交提案」→ 等用户回「提交」才 commit。
+
+    提案走通用写闸（orchestrator/lib/write-gate.mjs），确认后才 git commit。
+    """
+    if not is_allowed(user_id):
+        tg_send_message(chat_id, "抱歉，你不在授权用户名单中，无法提交 TITAN 任务。", dedup=True)
+        return
+    tg_send_message(chat_id, "已收到生成任务，正在生成代码并做独立验收（可能需要几分钟）...")
+    data = titan_dispatch_json(task, user_id, mode="codegen", intent=MODE_TO_INTENT.get("codegen"), reply_channel=str(chat_id))
+    if not data.get("ok"):
+        msg = str(data.get("stderr") or data.get("summary") or data.get("error") or "未知错误")[:800]
+        tg_send_message(chat_id, "生成失败: " + msg)
+        return
+    pid = data.get("proposalId")
+    files = data.get("files") or []
+    summary = str(data.get("summary") or "")[:1200]
+    PENDING_CODEGEN[chat_id] = {
+        "proposal_id": pid,
+        "files": files,
+        "summary": summary,
+        "user_id": str(user_id),
+    }
+    lines = [
+        "生成完成，独立验收通过（作者 != 验证者）。",
+        "文件: " + (", ".join(files) if files else "(无)"),
+        "提案: " + str(pid),
+        "",
+        "摘要:",
+        summary,
+        "",
+        "回复「提交」确认 commit，或回复「取消」放弃。",
+    ]
+    tg_send_message(chat_id, chr(10).join(lines))
+
+
+def do_codegen_commit(chat_id, user_id):
+    """用户回「提交」→ 显式确认提案 + 落盘（git commit）。"""
+    pend = PENDING_CODEGEN.pop(chat_id, None)
+    if not pend or not pend.get("proposal_id"):
+        tg_send_message(chat_id, "没有待提交的生成提案。", dedup=True)
+        return
+    try:
+        r = subprocess.run(
+            [
+                _node_bin(),
+                os.path.join(TITAN_ROOT, "orchestrator", "titan-codegen.mjs"),
+                "--commit",
+                pend["proposal_id"],
+                "--by",
+                f"telegram:{user_id}",
+            ],
+            cwd=TITAN_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except Exception as e:
+        tg_send_message(chat_id, "提交失败: " + str(e)[:300])
+        return
+    if r.returncode != 0:
+        detail = ((r.stdout or "") + (r.stderr or ""))[-800:]
+        tg_send_message(chat_id, "提交失败: " + detail)
+        return
+    tg_send_message(chat_id, "已提交:" + chr(10) + (r.stdout or "")[-800:])
+
+
+def do_codegen_cancel(chat_id):
+    """用户回「取消」→ 提案标记 rejected，生成物保持未入库状态（不自动删文件）。"""
+    pend = PENDING_CODEGEN.pop(chat_id, None)
+    if not pend:
+        tg_send_message(chat_id, "没有待确认的生成提案。", dedup=True)
+        return
+    pid = pend.get("proposal_id")
+    if pid:
+        try:
+            _run_gate(["reject", "--proposal", pid, "--by", "telegram:cancel", "--reason", "用户取消"])
+        except Exception as e:
+            tg_send_message(chat_id, "取消提案时出错（已放弃提交）: " + str(e)[:200])
+            return
+    files = pend.get("files") or []
+    tg_send_message(
+        chat_id,
+        "已放弃本次生成。提案 " + str(pid) + " 已标记 rejected。生成物未入库，路径: "
+        + (", ".join(files) if files else "(无)"),
+    )
 
 
 def is_allowed(user_id):
@@ -178,9 +292,16 @@ def is_allowed(user_id):
 
 def handle_task(chat_id, user_id, task):
     """2. 长任务放后台 daemon 线程：轮询线程不被 300 秒的网关调用卡死。"""
+    mode, sub, pipeline = classify_intent(task)
+    if mode == "codegen":
+        handle_codegen(chat_id, user_id, task)
+        return
+    if mode == "execute":
+        handle_execute(chat_id, user_id, task, pipeline)
+        return
     tg_send_message(chat_id, "已收到任务，正在提交给 TITAN 流水线...")
     try:
-        result = titan_dispatch(task, user_id)
+        result = titan_dispatch(task, user_id, intent=MODE_TO_INTENT.get(mode), reply_channel=str(chat_id))
     except Exception as e:  # noqa: BLE001
         result = f"内部错误: {str(e)[:200]}"
     tg_send_message(chat_id, result)
@@ -191,6 +312,13 @@ def classify_intent(text):
     返回 (mode, task, pipeline)：mode='consult'|'execute'；pipeline='scan'|'review'。
     方案B：前缀命中即定模式并剥前缀；方案A：无前缀时扫关键词，默认咨询。"""
     t = (text or "").strip()
+    low = t.lower()
+    for p in CODEGEN_PREFIXES:
+        if t.startswith(p):
+            return "codegen", t[len(p):].strip(" ：:，,。"), ""
+    if any(k in low for k in CODEGEN_KEYWORDS) and not FILE_TOKEN_RE.search(t):
+        if not any(k in low for k in ("修复", "修bug", "修 bug", "改代码", "修改", "重构", "落地", "审阅", "执行")):
+            return "codegen", t, ""
     for p in EXECUTE_PREFIXES:
         if t.startswith(p):
             return "execute", t[len(p):].strip(" ：:，,。"), ("review" if p == "审阅" else "scan")
@@ -498,6 +626,18 @@ def main():
                     daemon=True,
                     name="titan-voice",
                 ).start()
+                continue
+            if chat_id in PENDING_CODEGEN:
+                if not is_allowed(user_id):
+                    tg_send_message(chat_id, "抱歉，你不在授权用户名单中，无法提交 TITAN 任务。", dedup=True)
+                    continue
+                ans = (text or "").strip()
+                if ans == "提交":
+                    do_codegen_commit(chat_id, user_id)
+                elif ans == "取消":
+                    do_codegen_cancel(chat_id)
+                else:
+                    tg_send_message(chat_id, "请回复「提交」确认 commit，或回复「取消」放弃。", dedup=True)
                 continue
             # T-122：挂起落地任务的文件补充应答（文本文件名 或 直接发文件）
             if chat_id in PENDING_EXECUTE and (document or not text.startswith("!titan ")):

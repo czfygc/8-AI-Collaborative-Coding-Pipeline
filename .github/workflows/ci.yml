@@ -18,11 +18,25 @@ jobs:
         with:
           node-version: 20
 
+      - name: ISSUE_REGISTRY JSON 校验
+        run: node orchestrator/pre-commit-check.mjs
+
+      - name: Skill quality gate (T-155)
+        run: node orchestrator/skill-quality.mjs --strict
+
       - name: verify-gate
         run: node orchestrator/verify-gate.mjs
 
       - name: Gate tests
-        run: node --test orchestrator/test/
+        # T-164 实测：Node 24 上 `node --test orchestrator/test/`（目录参数）会退化成
+        # 「把目录当模块加载」→ MODULE_NOT_FOUND；改用 glob 形式（Node 20/22/24 通用）。
+        run: node --test "orchestrator/test/*.test.mjs"
+
+      - name: Delivery gates (T-175)
+        # 交付闸：第三方署名必须 PASS（显式未知不当通过）；产物/发布段在仓库本体上未判 = UNKNOWN
+        run: |
+          node orchestrator/artifact-gate.mjs license --root .
+          node orchestrator/artifact-gate.mjs stage-gate --root . --code PASS || true
 
       - name: Secret scan (gitleaks, fail on match)
         uses: gitleaks/gitleaks-action@v2

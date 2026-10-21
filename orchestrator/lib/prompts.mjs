@@ -6,6 +6,7 @@
 // 依赖：lib/markers.mjs（markerStart/markerEnd——prompt 边界标记）、lib/constants.mjs（截断/尾窗常量）。
 import { markerStart, markerEnd } from './markers.mjs';
 import { MAX_REPORT_CHARS, SNAPSHOT_TAIL_CHARS } from './constants.mjs';
+import { composeSystemPrompt, applyPersona } from './persona.mjs';
 
 // ---------- 注入/提交/快照脚本 ----------
 export function buildInjectScript(promptText) {
@@ -450,6 +451,12 @@ export function buildReviewPrompt(report, reviewer, dispatchId, timestamp) {
     report + '\n' +
     markerEnd() + '\n';
   return header + reviewer.perspective_prompt + '\n\n' + body;
+}
+
+export { composeSystemPrompt, applyPersona };
+
+export function buildPersonaSystemPrompt(basePrompt, persona) {
+  return composeSystemPrompt(basePrompt, persona);
 }
 
 export function buildUploadPrompt(reviewer, dispatchId, timestamp, artifactFileName) {

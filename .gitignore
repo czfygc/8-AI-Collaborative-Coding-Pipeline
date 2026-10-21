@@ -40,6 +40,18 @@ HARNESS/browser/evidence/
 # TITAN orchestrator runtime logs (regenerable)
 orchestrator/logs/
 
+# T-153 Run 事件账本 + 写闸提案/暂存（运行期数据，可再生；证据另存 archive/evidence/）
+orchestrator/run-events/
+
+# T-166 意图落盘（运行期审计面：每次网关请求一条，可再生；证据另存 archive/evidence/）
+reviews/_pending/
+
+# T-162 生命周期 pipeline 产物（运行期：每次 --design/--pipeline 生成，可再生）
+reviews/pipeline-*/
+
+# Office/Excel 锁文件（打开 xlsx/docx 时生成，勿入库）
+~$*
+
 # T-06 计划2: FreeLLMAPI 本地部署（嵌套三方仓库，含明文密钥配置，绝不入库）
 freellmapi-src/
 
@@ -83,3 +95,9 @@ tmp/cline-data/
 tmp/ofm-cline-datadir/
 tmp/ofm-m4-clinedir/
 tmp/ofm-anyrouter/hdr.txt
+
+# T-145 沙箱运行时工件与账本（可再生、体积大；量测结论另存 archive/evidence/ 报告）
+archive/sandbox/
+
+# T-150 coding 记忆链原型的运行期数据（可再生；不进共享记忆库）
+titan-memory/chain-data/

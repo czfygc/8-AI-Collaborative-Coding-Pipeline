@@ -8,7 +8,7 @@ import { join, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
   listPublishedFiles, fingerprint, secretScan, computeDrift, inferSourceCommit,
-  readLedger, writeLedger, ledgerPath, isNeverPublish
+  readLedger, writeLedger, ledgerPath, isNeverPublish, sourceOf, PUBLISH_MAP
 } from '../publish-sync.mjs';
 
 function sh(cmd, args, cwd) {
@@ -89,6 +89,39 @@ test('isNeverPublish: ledger-class and instance data are banned, pipeline code i
   assert.equal(isNeverPublish('orchestrator/test/publish-sync.test.mjs'), false);
   assert.equal(isNeverPublish('README.md'), false);
   assert.equal(isNeverPublish('.agents/skills/titan-four-party-consult/SKILL.md'), false);
+  // 只发布流水线本身，不发布流水线做出的产品（研究产出/实例记忆/文档目录）
+  assert.equal(isNeverPublish('docs/publish/AGENTS.md'), true);
+  assert.equal(isNeverPublish('titan-memory/core/CORE.md'), true);
+  assert.equal(isNeverPublish('titan-memory/notes/2026-10-21-lessons.md'), true);
+  assert.equal(isNeverPublish('titan-memory/core/anything.md'), true);
+  assert.equal(isNeverPublish('design-specs/anything.md'), true);
+});
+
+test('PUBLISH_MAP: 发布树里的 AGENTS.md 取本地公开版（docs/publish/AGENTS.md），不用本地宪法覆盖', () => {
+  assert.equal(sourceOf('AGENTS.md'), 'docs/publish/AGENTS.md');
+  assert.equal(sourceOf('README.md'), 'README.md');
+  assert.equal(sourceOf('orchestrator/lib/task-card.mjs'), 'orchestrator/lib/task-card.mjs');
+  // 映射生效时：本地宪法改了内容，也不会被判成"发布树待同步"（因为比对的是公开版来源）
+  const local = makeRepo();
+  const pub = makeRepo();
+  try {
+    mkdirSync(join(local, 'docs', 'publish'), { recursive: true });
+    writeFileSync(join(local, 'docs', 'publish', 'AGENTS.md'), 'PUBLIC-RULES\n');
+    writeFileSync(join(local, 'AGENTS.md'), 'LOCAL-CONSTITUTION\n');
+    writeFileSync(join(pub, 'AGENTS.md'), 'PUBLIC-RULES\n');
+    sh('git', ['add', '-A'], pub);
+    sh('git', ['commit', '-q', '-m', 'add public agents'], pub);
+    const files = listPublishedFiles(pub);
+    const d = computeDrift(local, pub, files, [], '');
+    assert.ok(!d.changed.some((c) => c.file === 'AGENTS.md'), '本地宪法变化不得触发 AGENTS.md 同步: ' + JSON.stringify(d.changed));
+    // 公开版改了 → 才会被判为待同步
+    writeFileSync(join(local, 'docs', 'publish', 'AGENTS.md'), 'PUBLIC-RULES-V2\n');
+    const d2 = computeDrift(local, pub, files, [], '');
+    assert.ok(d2.changed.some((c) => c.file === 'AGENTS.md'), '公开版变化必须触发同步: ' + JSON.stringify(d2.changed));
+  } finally {
+    sh('cmd', ['/c', 'rmdir', '/s', '/q', local]);
+    sh('cmd', ['/c', 'rmdir', '/s', '/q', pub]);
+  }
 });
 
 test('computeDrift: tracked-but-banned files are reported as prune candidates, never as sync targets', () => {

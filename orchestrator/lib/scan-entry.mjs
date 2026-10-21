@@ -21,21 +21,26 @@
 // 回归：--analyze 66c0f00e 冻结值不涉本块；scan 冒烟=不存在文件 exit 1（路径校验链证明动态导入可达）。
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { promises as fsPromises } from 'node:fs';
-import { resolve as resolvePath, normalize as normalizePath, join, sep as pathSep } from 'node:path';
+import { resolve as resolvePath, normalize as normalizePath, join, relative as relativePath, isAbsolute as isAbsolutePath, sep as pathSep } from 'node:path';
 import * as yaml from 'js-yaml';
 import { TITAN_ROOT, CDP_HOST, REVIEWERS_YAML } from './constants.mjs';
 import { CDP } from '../cdp-client.mjs';
 import { runTabUpload } from './session-send.mjs';
 import { runProcess } from './proc-tree.mjs';
+import { scanInput, summarizeFindings } from './input-integrity.mjs';
 
-export async function runScanEntry({ scanFile, args, getFlagValue, getIntFlag }) {
+export async function runScanEntry({ scanFile, args, getFlagValue, getIntFlag, scanRoot = TITAN_ROOT }) {
   const { runScanMode, parseFindingsJson } = await import('../scan-flow.mjs');
   // T-49 R2：--scan 支持逗号分隔多文件（完整逻辑链）；--local-only 只跑本地 4 席
   //（多文件交叉引用只有本地 agentic 席能做，网页席单附件通道不参与 R2）。
+  // T-167（R7 实装）：有效根 = --repo（外仓）否则 TITAN_ROOT；越界判据改 DELTA-012 口径
+  //（path.relative + isAbsolutePath），与入口 orchestrate.mjs 的 --scan 校验同判据。
   const scanAbsList = scanFile.split(',').map((p) => resolvePath(p.trim())).filter(Boolean);
-  const scanRootNorm = normalizePath(TITAN_ROOT);
+  const scanRootNorm = normalizePath(scanRoot);
   for (const p of scanAbsList) {
-    if (!normalizePath(p).startsWith(scanRootNorm + pathSep)) { console.error('ERROR: --scan 文件越界（必须位于工作区内）: ' + p); process.exit(1); }
+    const rel = relativePath(scanRootNorm, normalizePath(p));
+    const outside = rel === '' || rel === '..' || rel.startsWith('..' + pathSep) || isAbsolutePath(rel);
+    if (outside) { console.error('ERROR: --scan 文件越界（必须位于 ' + scanRootNorm + ' 内）: ' + p); process.exit(1); }
     if (!existsSync(p)) { console.error('ERROR: 文件不存在: ' + p); process.exit(1); }
   }
 const scanIsMulti = scanAbsList.length > 1;
@@ -50,9 +55,39 @@ const localOnly = forceLocalOnly(scanIsMulti, args.includes('--local-only'));
 
   // 弱回复质量门（T-40）：回复中解析不出任何带合法 severity+title 的 finding → 判弱，
   // 触发刷新/重发。注意 prompt 已删除"无问题输出 []"诱导句（实测该句会让 grok/chatgpt 直接回空数组）。
+  // T-72（2026-10-21 用户指令）：关闭同席位的重复 tab —— 浏览器开的页越多越吃内存、
+  // 渲染争抢越狠（5 席 + 文件页已不少，重试再开新页 = 双倍占用 → 席级超时）。
+  // 只关「同席位（url_match 命中）且不是当前使用页」的 tab，不动别的页面。
+  const closeDuplicateSeats = async (cdp, reviewer, keepPage) => {
+    const urlRe = reviewer.url_match ? new RegExp(reviewer.url_match) : null;
+    if (!urlRe) return 0;
+    let cur = [];
+    try {
+      cur = await fetch('http://' + CDP_HOST + '/json/list').then((r) => r.json());
+    } catch (e) {
+      return 0;
+    }
+    const dupes = cur.filter((x) => x.type === 'page' && urlRe.test(x.url) && (!keepPage || x.id !== keepPage.id));
+    let closed = 0;
+    for (const d of dupes) {
+      try {
+        await cdp.send('Target.closeTarget', { targetId: d.id });
+        closed++;
+      } catch (e) { /* 关不掉就跳过，不阻塞重试 */ }
+    }
+    if (closed) console.log('[SCAN] seat ' + reviewer.name + ' 关闭重复 tab ' + closed + ' 个（省内存/防卡死）');
+    return closed;
+  };
+
   const webRegenGate = (text) => {
+    const s = String(text || '');
+    // T-71（2026-10-21 实测 scan-mvh8vnmh → scan-mvha0zta 两轮）：短文本不判弱。
+    // 两种短文本都会误触发 regen：① 页面未渲染完的空壳（deepseek 首轮超时兜底仅 61 字符）；
+    // ② 合法空回复（gemini 回 `[]` = 未发现问题）。regen 找不到刷新按钮 → 同页重发
+    // prompt → 同一页两条用户气泡 = 重复气泡（T-71 观察项）。短文本一律放行。
+    if (s.trim().length < 200) return false;
     let findings = [];
-    try { findings = parseFindingsJson(String(text || '')); } catch { findings = []; }
+    try { findings = parseFindingsJson(s); } catch { findings = []; }
     const valid = (Array.isArray(findings) ? findings : []).filter(
       (f) => f && f.title && ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(String(f.severity || '').toUpperCase())
     );
@@ -94,40 +129,98 @@ const localOnly = forceLocalOnly(scanIsMulti, args.includes('--local-only'));
     } catch (e) {
       return allSeats.map((rv) => ({ source: rv.name, replyText: '', error: 'CDP ws: ' + e.message }));
     }
+    // T-72（2026-10-21 用户指令）：标签页预算 —— 5 席 + 1 个文件/附件页 = 6 页上限；
+    // 只用 4 席时上限自动变 5 页。超过上限说明存在**同席位的重复页**（席位页数是固定的，
+    // 多出来的必然是重复），必须关掉：浏览器开的页越多越吃内存、渲染争抢越狠，
+    // 直接导致席级超时（实测 deepseek 空回复 61 字符、kilo 300s 超时）。
+    // 只关「url_match 命中同席位」的重复页，绝不碰用户自己的其它标签页。
+    const tabBudget = allSeats.length + 1;
+    const seatPages = new Map();
+    for (const x of list) {
+      if (x.type !== 'page') continue;
+      for (const rv of allSeats) {
+        if (!rv.url_match) continue;
+        if (new RegExp(rv.url_match).test(x.url)) {
+          seatPages.set(rv.name, [...(seatPages.get(rv.name) || []), x]);
+          break;
+        }
+      }
+    }
+    let closedDup = 0;
+    for (const [seat, pages] of seatPages) {
+      if (pages.length <= 1) continue;
+      for (const extra of pages.slice(1)) {
+        try { await cdp.send('Target.closeTarget', { targetId: extra.id }); closedDup++; }
+        catch (e) { /* 关不掉就跳过 */ }
+      }
+      console.log('[SCAN] 席位 ' + seat + ' 有 ' + pages.length + ' 个重复页，已关 ' + (pages.length - 1) + ' 个（页数预算 ' + tabBudget + '）');
+    }
+    const totalPages = list.filter((x) => x.type === 'page').length;
+    console.log('[SCAN] 标签页预算 ' + tabBudget + '（' + allSeats.length + ' 席 + 1 文件页）；当前 ' + totalPages + ' 页，已关重复席位页 ' + closedDup + ' 个');
+    if (closedDup > 0) {
+      // 关页后重新取列表（CDP 连接不受影响，无需重连）
+      try {
+        list = await fetch('http://' + CDP_HOST + '/json/list').then((r) => r.json());
+      } catch (e) { /* 取不到就沿用旧列表 */ }
+    }
     try {
-      return await Promise.all(allSeats.map(async (rv) => {
+      return await Promise.all(allSeats.map(async (rv, seatIdx) => {
+        // T-72（2026-10-21 用户指令）：各席错开 10 秒启动 —— 5 席同时刷新页面 + 发送附件
+        // 会把浏览器打挂（页面越多越吃内存、渲染争抢 → 席级超时）。错开后总时长 +N*10s，
+        // 但每席不再被卡死，实际完成更快。
+        if (seatIdx > 0) {
+          const staggerMs = seatIdx * 10000;
+          console.log('[SCAN] seat ' + rv.name + ' 错开 ' + staggerMs + 'ms 启动（避免 5 席同时刷新/发文件卡死网页）');
+          await new Promise((r) => setTimeout(r, staggerMs));
+        }
         const urlRe = rv.url_match ? new RegExp(rv.url_match) : null;
         const page = urlRe ? list.find((x) => x.type === 'page' && urlRe.test(x.url)) : null;
         if (!page) return { source: rv.name, replyText: '', error: 'tab missing: ' + (rv.url_match || '(no url_match)') };
-        // 附件通道（用户指令：网页 4 席完整文件走附件 + 简短描述 prompt，不要频繁测试）。
+        // T-122 步骤2.3：附件通道（用户指令：网页 4 席完整文件走附件 + 简短描述 prompt，不要频繁测试）。
         // 重试：抛错 / UPLOAD_FAILED 可重试（共 3 次，fresh-chat 每次开新会话）；
         // response-timeout / 空回复不重试（上轮已发出，重发只会造成重复气泡）。
         const attempt = async () => runTabUpload(cdp, page, rv, scanFilePath, webPrompt,
           scanRawDir, scanShotDir, { regenGate: webRegenGate, maxRegen: 1 });
         let log = null;
         try {
-          for (let t = 0; t < 3; t++) {
+          // T-72（2026-10-21 用户指令「等待结果的时间太长」）：上传失败重试 3 次 → 2 次。
+          // 单次重试成本 ≈ fresh-chat 30s + 上传 30s + 附件确认 30s ≈ 90s，第 3 次纯属烧时间
+          // （实测 qwen/chatgpt 附件通道连续失败，重试到底也拿不到产物）。
+          for (let t = 0; t < 2; t++) {
             try {
               log = await attempt();
             } catch (e) {
               const em = String((e && e.message) || e);
-              if (t >= 2) return { source: rv.name, replyText: '', error: em };
+              if (t >= 1) return { source: rv.name, replyText: '', error: em };
               console.log('[SCAN] seat ' + rv.name + ' attempt-' + (t + 1) + ' 抛错，3s 后重试: ' + em);
               await new Promise((r) => setTimeout(r, 3000));
               continue;
             }
             const uploadFailed = log && (log.ok === false || String(log.error || '').startsWith('UPLOAD_FAILED'));
-            if (!uploadFailed || t >= 2) break;
-            console.log('[SCAN] seat ' + rv.name + ' attempt-' + (t + 1) + ' 上传失败（' + log.error + '），3s 后重试');
+            if (!uploadFailed || t >= 1) break;
+            console.log('[SCAN] seat ' + rv.name + ' attempt-' + (t + 1) + ' 上传失败（' + log.error + '），关重复页后 3s 重试');
+            // T-72（2026-10-21 用户指令）：重试前关掉该席位的重复 tab —— 浏览器开的页越多
+            // 越吃内存、越卡（同席位多页会互相拖慢渲染，甚至让重试页也超时）。
+            await closeDuplicateSeats(cdp, rv, page);
             await new Promise((r) => setTimeout(r, 3000));
           }
           const replyText = (log && log.snapshot && log.snapshot.lastText) || '';
+          // T-154：网页席回复是不可信输入（页面内容可能携带隐藏指令）→ 完整性检测。
+          // 只报警不阻断：不改变 findings 解析与主链语义，只在该席结果上挂 integrity 标记。
+          let integrity = null;
+          if (replyText) {
+            const scan = scanInput(replyText);
+            if (!scan.ok) {
+              integrity = { ok: false, counts: scan.counts, summary: summarizeFindings(scan) };
+              console.warn('[INPUT-INTEGRITY] 席位 ' + rv.name + ' 回复命中完整性检查（不阻断）: ' + integrity.summary);
+            }
+          }
           if (log && log.error) {
             const kind = String(log.error).startsWith('UPLOAD_FAILED') ? 'upload-failed' : 'response-timeout';
-            return { source: rv.name, replyText, error: kind + ': ' + log.error };
+            return { source: rv.name, replyText, error: kind + ': ' + log.error, integrity };
           }
-          if (!replyText) return { source: rv.name, replyText: '', error: 'empty-reply (fallback=' + ((log && log.snapshot && log.snapshot.fallback) || 'n/a') + ')' };
-          return { source: rv.name, replyText, error: null };
+          if (!replyText) return { source: rv.name, replyText: '', error: 'empty-reply (fallback=' + ((log && log.snapshot && log.snapshot.fallback) || 'n/a') + ')', integrity };
+          return { source: rv.name, replyText, error: null, integrity };
         } catch (e) {
           return { source: rv.name, replyText: '', error: String((e && e.message) || e) };
         }

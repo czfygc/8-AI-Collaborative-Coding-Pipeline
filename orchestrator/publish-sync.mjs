@@ -88,6 +88,9 @@ const NEVER_PUBLISH = [
   /^orchestrator\/分阶段拆分计划\.md$/,
   /^orchestrator\/计划-收口修复-/,
   /^titan-memory\/core\/CORE\.md$/,            // 实例记忆（非逻辑链；公开仓应各自生成）
+  /^titan-memory\/core\//,                    // 实例记忆目录（核心 + 长尾笔记）
+  /^titan-memory\/notes\//,                   // 实例记忆长尾笔记（与 CORE.md 同类）
+  /^docs\//,                                  // 研究/产品文档：只发布流水线本身，不发布流水线做出的产品
   /^\.agents\/skills\/titan-publish-sync\//,   // 本技能自身（内部运维 SOP，含本地路径与政策）
   /^(PUBLISH_SYNC)\.json$/,                    // 本地账本（含本地发布树路径，不入公开仓）；发布侧清单 PUBLISH_MANIFEST.json 相反，必须发布
   /\.log$/i,
@@ -98,6 +101,19 @@ const NEVER_PUBLISH = [
 export function isNeverPublish(rel) {
   const r = String(rel).split('\\').join('/');
   return NEVER_PUBLISH.some((re) => re.test(r));
+}
+
+// 发布路径映射：发布树里的文件从本地仓的哪个文件取内容。
+// 用途：发布树里的 AGENTS.md 是**公开版宪法**（内容源在本地仓 docs/publish/AGENTS.md），
+//       不能用本地宪法覆盖它（本地宪法含内部信息，按 M8 不外发）。
+export const PUBLISH_MAP = Object.freeze({
+  'AGENTS.md': 'docs/publish/AGENTS.md',
+});
+
+/** 发布路径 → 本地来源路径 */
+export function sourceOf(rel) {
+  const r = String(rel).split('\\').join('/');
+  return PUBLISH_MAP[r] || r;
 }
 
 // 禁止出现在发布树里的文件（路径片段 + 文件名模式）
@@ -178,7 +194,7 @@ export function computeDrift(localRoot, pubDir, publishedFiles, extraInclude = [
   const changedDenied = [];   // 已跟踪但属禁推（apply 将 git rm --cached 剔除）
   const publishedOnly = [];
   for (const f of publishedFiles) {
-    const lp = join(localRoot, f);
+    const lp = join(localRoot, sourceOf(f));
     const pp = join(pubDir, f);
     if (isNeverPublish(f)) { changedDenied.push(f); continue; }
     if (!existsSync(lp)) { publishedOnly.push(f); continue; }
@@ -375,7 +391,7 @@ function cmdPlan(opts) {
   if (!targets.length && !drift.changedDenied.length) { console.log('无待同步内容。'); return 0; }
   let blocked = 0;
   for (const t of targets) {
-    const lp = join(localRoot, t.file);
+    const lp = join(localRoot, sourceOf(t.file));
     const pp = join(pubDir, t.file);
     if (!existsSync(lp)) { console.log('  [跳过] ' + t.file + ' (本地不存在)'); continue; }
     const issues = secretScan(lp, t.file);
@@ -424,7 +440,7 @@ function cmdApply(opts) {
   const copied = [];
   const blocked = [];
   for (const t of targets) {
-    const lp = join(localRoot, t.file);
+    const lp = join(localRoot, sourceOf(t.file));
     const pp = join(pubDir, t.file);
     if (!existsSync(lp)) { failed.push(t.file + ' (本地不存在)'); continue; }
     const issues = secretScan(lp, t.file);

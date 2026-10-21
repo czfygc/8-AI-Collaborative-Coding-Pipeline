@@ -80,7 +80,11 @@ export const TITAN_ROOT = process.env.D_TITAN_ROOT || configFromFile.D_TITAN_ROO
  * @constant {number} TIMEOUT_ARTIFACT_UNIT_KB - 50KB 单位
  */
 export const TIMEOUT_INLINE_BASE_MS = 180000;
-export const TIMEOUT_UPLOAD_BASE_MS = 300000;
+// T-72（2026-10-21 用户指令「等待结果的时间太长，要提高效率」）：upload 基线 300s → 240s。
+// 实测有回复的席均在 60~120s 内落地（deepseek 5/gemini 3/grok 5 findings），240s 仍留足余量；
+// 真正拖时长的席位是"发不出去/没渲染"的席（如 qwen/chatgpt 上传失败），它们本来就没有产物。
+// 超时仍有 T-62 全文兜底，不丢内容，只是提前标记。
+export const TIMEOUT_UPLOAD_BASE_MS = 240000;
 export const TIMEOUT_INLINE_MAX_MS = 360000;
 export const TIMEOUT_UPLOAD_MAX_MS = 600000;
 export const TIMEOUT_ARTIFACT_FACTOR = 1.1;

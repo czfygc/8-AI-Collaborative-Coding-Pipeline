@@ -53,7 +53,7 @@ for (const f of mjsFiles) {
 console.log('[GATE] -- syntax ' + syntaxOk + '/' + mjsFiles.length + ' --');
 
 // ② 导入冒烟闸门（纯库模块白名单；CLI 入口有顶层副作用，不入列）
-const LIB_MODULES = ['cdp-client.mjs', 'review-flow.mjs', 'scan-flow.mjs', 'lib/constants.mjs', 'lib/prompts.mjs', 'lib/reviewers.mjs', 'lib/history-locks.mjs', 'lib/analyze-core.mjs', 'lib/decision-api.mjs', 'lib/session-nav.mjs', 'lib/session-send.mjs', 'lib/architect.mjs', 'lib/scan-entry.mjs', 'lib/contracts.mjs'];
+const LIB_MODULES = ['cdp-client.mjs', 'review-flow.mjs', 'scan-flow.mjs', 'lib/constants.mjs', 'lib/prompts.mjs', 'lib/reviewers.mjs', 'lib/history-locks.mjs', 'lib/analyze-core.mjs', 'lib/decision-api.mjs', 'lib/session-nav.mjs', 'lib/session-send.mjs', 'lib/architect.mjs', 'lib/scan-entry.mjs', 'lib/contracts.mjs', 'lib/output-sandbox.mjs', 'lib/skill-quality.mjs', 'lib/run-events.mjs', 'lib/write-gate.mjs', 'lib/test-runner.mjs', 'lib/verify-profiles.mjs', 'lib/repo-scope.mjs', 'lib/lineage.mjs', 'lib/intent.mjs', 'lib/skill-manifest.mjs'];
 let importOk = 0;
 for (const f of LIB_MODULES) {
   if (!existsSync(join(__dirname, f))) {
@@ -72,6 +72,15 @@ const CLI_SMOKE = [
   ['CLI fixer-pool --dry-run', ['fixer-pool.mjs', '--dry-run']],
   ['CLI delta-to-registry --dry-run', ['delta-to-registry.mjs', '--dry-run']],
   ['CLI titan-execute --help', ['titan-execute.mjs', '--help']],
+  ['CLI sandbox --help', ['sandbox.mjs', '--help']],
+  ['CLI run-tests --help', ['run-tests.mjs', '--help']],
+  ['CLI verify-profile --help', ['verify-profile.mjs', '--help']],
+  ['CLI lineage --help', ['lineage.mjs', '--help']],
+  ['CLI skill-manifest --help', ['skill-manifest.mjs', '--help']],
+  ['CLI task-card --help', ['task-card.mjs', '--help']],
+  ['CLI model-health --help', ['model-health.mjs', '--help']],
+  ['CLI supervisor --help', ['supervisor.mjs', '--help']],
+  ['CLI artifact-gate --help', ['artifact-gate.mjs', '--help']],
 ];
 const cliT0 = Date.now();
 let cliOk = 0;
@@ -113,6 +122,35 @@ console.log('[GATE] -- test ' + (testFiles.length === 0 ? '0/0' : testOk + '/' +
 run('self-check orchestrate.mjs', ['orchestrate.mjs', '--self-check']);
 // P-19 时代的 A-orchestrate.mjs 备份件已在 T-49 退役（文件不存在）；原条件自检分支随之摘除
 // （注：加载期炸弹教训由 orchestrate.mjs 本体的 self-check 继续覆盖）。
+
+// ⑤' 交付闸（T-175）：本仓自身的许可证与第三方署名必须可判定且合格。
+// 纪律：显式未知（UNKNOWN）不当通过——署名判不出来就不许提交。
+// 但"可分发项目形态"才适用：仓库根没有 package.json 时（如干净沙箱自检）判为不适用，跳过而非误红。
+// 产物段（清单）与发布段（匿名可下载）对"仓库本体"不适用，故此处只判许可证段；
+// 三段语义用 stage-gate 复核，后两段未判即显式未知（发布前由发布流程单独判）。
+const { checkLicenses } = await import('./lib/license-notice-check.mjs');
+const { evaluateStages } = await import('./lib/stage-gate.mjs');
+const repoRootForGate = join(__dirname, '..');
+const distributableShape = existsSync(join(repoRootForGate, 'package.json'));
+let licenseRes = { status: 'PASS', issues: [], deps_count: 0, notice_file: null, license_file: null, skipped: true };
+if (distributableShape) {
+  licenseRes = checkLicenses({ root: repoRootForGate, profileName: 'node-cli' });
+  if (licenseRes.status === 'PASS') {
+    console.log('[GATE] PASS 交付闸 许可证/第三方署名：PASS（依赖 ' + licenseRes.deps_count + ' 个，NOTICE=' + (licenseRes.notice_file || '无') + '）');
+  } else {
+    const detail = licenseRes.issues.map((i) => i.detail).join(' | ').slice(0, 300);
+    console.log('[GATE] FAIL 交付闸 许可证/第三方署名：' + licenseRes.status + ' — ' + detail);
+    failures.push('交付闸 许可证/第三方署名 ' + licenseRes.status + '：' + detail);
+  }
+} else {
+  console.log('[GATE] PASS 交付闸 跳过：仓库根无 package.json（非可分发项目形态，不适用）');
+}
+const deliveryStages = evaluateStages({
+  code: 'PASS',
+  artifact: licenseRes.status === 'PASS' ? 'PASS' : null,
+  release: null,
+});
+console.log('[GATE] -- 交付三段 ' + deliveryStages.summary + '（发布段未判 = 显式未知，不当发布通过） --');
 
 // ⑥ 注入模板泄漏静态闸：backtick 模板 span 剥离 ${...} 后含裸 Node 作用域标识符即红。
 // 依据：T-01（markerEnd 泄漏进浏览器模板）与 S-01（reviewer.url_open 裸引用）均为

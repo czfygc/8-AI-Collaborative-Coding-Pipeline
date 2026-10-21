@@ -1,11 +1,11 @@
 {
-  "_comment": "CDP 与 API 通道分开记账；dispatch_cdp 按无附件口径计 10，带附件 3 次限制由 upload 流程另行控制。",
+  "_comment": "CDP 与 API 通道分开记账；dispatch_cdp 按无附件口径计 20，带附件 3 次限制由 upload 流程另行控制。",
   "version": "1.0.0",
-  "effective_from": "2026-10-02",
+  "effective_from": "2026-10-21",
   "daily": {
-    "dispatch_cdp": 10,
+    "dispatch_cdp": 20,
     "dispatch_api": 4,
-    "dispatch_total": 14,
+    "dispatch_total": 24,
     "fixer_tasks_per_client": 4,
     "gatekeeper_runs": 6
   },
@@ -20,10 +20,10 @@
   "fixer_scheduler": {
     "_comment": "两修理工用不同模型，避免并发时互抢同一模型",
     "max_concurrent_fixers": 2,
-    "flip_note": "两槽主选实测全绿；gemini 保留给 reviewer 席，不在修理工链内",
+    "flip_note": "两槽主选实测全绿；gemini 保留给 reviewer 席，不在修理工链内；两槽 fallback 链互不重叠，避免并发时互抢同一模型",
     "slots": {
-      "fixerA": { "client": "cline", "pin": "claude-sonnet-5", "fallbacks": ["mistral-code"], "flag": "-P openai -m", "chain_note": "A 末档=mistral-code" },
-      "fixerB": { "client": "opencode", "pin": "deepseek-v4-pro", "fallbacks": ["claude-sonnet-5", "codestral"], "flag": "-m freellmapi/" }
+      "fixerA": { "client": "cline", "pin": "claude-sonnet-4-6-free", "fallbacks": ["poolside/laguna-s-2.1:free"], "flag": "-P openai -m", "chain_note": "A 末档=poolside/laguna-s-2.1:free" },
+      "fixerB": { "client": "opencode", "pin": "minimax/minimax-m3.1-flash:free", "fallbacks": ["DeepSeek-V4-Flash", "mistral-code"], "flag": "-m freellmapi/" }
     },
     "note": "修理工模型不进 reviewer 独立性判定；两槽 fallback 链刻意错开，避免并发时互抢同一模型",
     "refix_limit_per_order": 2,

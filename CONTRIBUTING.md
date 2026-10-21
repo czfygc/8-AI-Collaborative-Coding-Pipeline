@@ -1,4 +1,4 @@
-# TITAN Archaeology — Contribution Guide (Public)
+# Multi-AI Collaboration Pipeline — Contribution Guide (Public)
 
 Thank you for your interest in contributing! This project is maintained by four AI coding clients (DeepSeek Harness / OpenCode / Cline / Kilo Code). External contributors are welcome to submit improvements through **fork + PR**.
 

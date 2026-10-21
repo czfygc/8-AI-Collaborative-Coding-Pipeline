@@ -143,7 +143,7 @@ export async function screenshotTab(cdp, sessionId, outPath) {
   return { bytes: buf.length };
 }
 
-export async function waitForResponse(cdp, sessionId, { maxMs = TIMEOUT_INLINE_BASE_MS, stableMs = RESPONSE_STABLE_DEFAULT_MS, pollMax = RESPONSE_POLL_MAX, extraSelectors, graceMs = 60000 } = {}) {
+export async function waitForResponse(cdp, sessionId, { maxMs = TIMEOUT_INLINE_BASE_MS, stableMs = RESPONSE_STABLE_DEFAULT_MS, pollMax = RESPONSE_POLL_MAX, extraSelectors, graceMs = 30000 } = {}) {
   const start = Date.now();
   let lastLen = -1;
   let lastBodyLen = -1;

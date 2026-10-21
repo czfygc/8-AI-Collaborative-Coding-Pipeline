@@ -1,6 +1,10 @@
 ---
 name: titan-review-channels
 description: "Use when choosing an error-hunting or review channel: '四方会诊' (web 4 AI seats) vs '本地验证' (local 4 clients, ordered calls) vs '8方查错' (both combined) — 查错通道选型 / 派谁去评审或验收 / 要不要派网页席或本地客户端 / 四方会诊 vs 本地验证 vs 8方查错。Gives the taxonomy, local call order, and red-line pointers (details live in the linked skills)."
+version: 1.0.0
+requires: node, cdp-browser-9222
+tests: manual: 对一个错误案例选通道并核对选型表
+provenance: original
 ---
 
 # 查错通道三档（2026-10-08 用户拍板，T-42 落盘）
@@ -14,7 +18,7 @@ description: "Use when choosing an error-hunting or review channel: '四方会�
 ## 本地验证调用序（按自带免费模型用量与稳定性定序；M4 仍要求作者≠验证者）
 
 1. **OpenCode 主力**——已加重模型配置（Zen 免费强档 + freellmapi，记忆 a77bf8d4）。改码/审查首选；**当 OpenCode 是作者时自动让位**（M4）。
-2. **Kilo 第一调用**——自带免费模型用量仅次于 OpenCode（`kilo run --model yysd/auto`）。**编辑工具缺 filePath 实测不可改码 → 只当 finder / 验证者**。
+2. **Kilo 第一调用**——自带免费模型用量仅次于 OpenCode（`kilo run --auto "<prompt>"`；2026-10-21 起内置免费模型自动轮询，不 pin `-m`）。**编辑工具缺 filePath 实测不可改码 → 只当 finder / 验证者**。
 3. **Cline 第二调用**——自带免费用量次于 Kilo。`cline.exe ... -P openai-compatible -m <具体id> --data-dir <隔离目录>`；**隔离 data-dir 必须预种 providers.json 的 baseUrl=http://127.0.0.1:3001/v1（env OPENAI_BASE_URL 不生效）**；验收 pin 具体模型禁 auto。
 4. **Harness 排最后**——无自带免费模型且 bug 多（GPO SecurityException、瞬时 503、NVIDIA key 404、冷启动 180s）。前三档不可用才上；**先冒烟见 final 再派真活**。
 

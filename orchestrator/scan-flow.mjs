@@ -4,7 +4,7 @@
 // 超时可配：TITAN_SCAN_TIMEOUT_MS（默认 300000ms）；路径可配：TITAN_OPENCODE_BIN / TITAN_CLINE_BIN / TITAN_KILO_BIN
 // --auto-fix 执行链（scan delta -> architect-decision(ACCEPT) -> titan-execute）实现在 orchestrate.mjs 的 scan 块。
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { basename, join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -204,12 +204,32 @@ function resolveCommand(name) {
   const table = {
     opencode: [process.env.TITAN_OPENCODE_BIN, 'D:\\TITAN_ARCHAEOLOGY\\test-projects\\landmine-001\\node_modules\\opencode-windows-x64\\bin\\opencode.exe', 'opencode'],
     cline: [process.env.TITAN_CLINE_BIN, 'D:\\TITAN_ARCHAEOLOGY\\cline-local\\node_modules\\@cline\\cli-windows-x64\\bin\\cline.exe', 'cline'],
-    kilo: [process.env.TITAN_KILO_BIN, 'C:\\Users\\Administrator\\.vscode\\extensions\\kilocode.kilo-code-7.8.3\\bin\\kilo.exe', 'kilo'],
+    kilo: [process.env.TITAN_KILO_BIN, 'C:\\Users\\Administrator\\.vscode\\extensions\\kilocode.kilo-code-7.8.15-win32-x64\\bin\\kilo.exe', 'kilo'],
   };
   for (const c of (table[name] || [name])) {
     if (!c) continue;
     if (!/[\\/]/.test(c)) return c;
     if (existsSync(c)) return c;
+  }
+  // T-71（2026-10-21 实测）：Kilo VS Code 扩展会静默自动更新，硬编码版本目录必然失效
+  // （scan 实录 spawn: spawn kilo ENOENT，版本化目录 7.8.3 → 实装 7.8.15）。
+  // 兜底：扫描扩展目录按语义版本取最新可用档（与 titan-execute.mjs 同款逻辑）。
+  if (name === 'kilo') {
+    const extRoot = 'C:\\Users\\Administrator\\.vscode\\extensions';
+    let best = null, bestV = [-1, -1, -1];
+    try {
+      for (const d of readdirSync(extRoot)) {
+        const vm = d.match(/^kilocode\.kilo-code-(\d+)\.(\d+)\.(\d+)/);
+        if (!vm) continue;
+        const exe = join(extRoot, d, 'bin', 'kilo.exe');
+        if (!existsSync(exe)) continue;
+        const v = [+vm[1], +vm[2], +vm[3]];
+        if (v[0] > bestV[0] || (v[0] === bestV[0] && v[1] > bestV[1]) || (v[0] === bestV[0] && v[1] === bestV[1] && v[2] > bestV[2])) {
+          bestV = v; best = exe;
+        }
+      }
+    } catch { /* 目录不可读则保持原路径，由 spawn 报错 */ }
+    if (best) return best;
   }
   return name;
 }
@@ -369,11 +389,15 @@ async function dispatch8WayParallel(content, absPath, webSeatRunner, webSeatArgs
   } else {
     webPromise = Promise.resolve(webSeats.map((s) => ({ source: s, findings: [], error: 'no webSeatRunner (CDP 未接入)' })));
   }
+  // T-72（2026-10-21 用户指令）：本地 4 席错开启动 —— 4 个 CLI 席同时满载跑 + 网页 5 席
+  // 同时刷新/发文件 = 内存与 CPU 双争（实测 kilo 300s 超时、opencode Bun 崩溃 exit 3）。
+  // 错开后各席独占资源，实测更快更稳。间隔 5s（本地席是 CLI，无浏览器渲染压力）。
+  const staggered = (label, ms) => new Promise((r) => setTimeout(r, ms)).then(() => console.log('[SCAN] 本地席 ' + label + ' 错开 ' + ms + 'ms 启动'));
   const [opencode, cline, kilo, harness, web] = await Promise.all([
-    runCliSeat('opencode', resolveCommand('opencode'), ['run', '--pure', '--format', 'json', '-m', ocModel, prompt]),
-    runCliSeat('cline', resolveCommand('cline'), ['--json', '--auto-approve', filePathMode ? 'true' : 'false', '-P', 'openai', '-m', clModel, '-c', TITAN_ROOT, prompt], clineEnv),
-    runCliSeat('kilo', resolveCommand('kilo'), ['run', ...(filePathMode ? ['--auto'] : []), '--model', klModel, prompt]),
-    runHarnessSeat(prompt),
+    staggered('opencode', 0).then(() => runCliSeat('opencode', resolveCommand('opencode'), ['run', '--pure', '--format', 'json', '-m', ocModel, prompt])),
+    staggered('cline', 5000).then(() => runCliSeat('cline', resolveCommand('cline'), ['--json', '--auto-approve', filePathMode ? 'true' : 'false', '-P', 'openai', '-m', clModel, '-c', TITAN_ROOT, prompt], clineEnv)),
+    staggered('kilo', 10000).then(() => runCliSeat('kilo', resolveCommand('kilo'), ['run', ...(filePathMode ? ['--auto'] : []), '--model', klModel, prompt])),
+    staggered('harness', 15000).then(() => runHarnessSeat(prompt)),
     webPromise,
   ]);
   return [opencode, cline, kilo, harness, ...web];

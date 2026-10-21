@@ -1,4 +1,9 @@
 {
+  "name": "multi-ai-collaboration-pipeline",
+  "version": "1.0.0",
+  "description": "Multi-AI Collaboration Pipeline — design, implement and review a project with multiple AI seats",
+  "license": "Apache-2.0",
+  "private": true,
   "dependencies": {
     "@playwright/mcp": "^0.0.83",
     "js-yaml": "^5.4.3",

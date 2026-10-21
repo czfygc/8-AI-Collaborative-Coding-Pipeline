@@ -1,0 +1,719 @@
+{
+  "schemaVersion": "v1",
+  "updatedAt": "2026-10-21",
+  "source": "freellmapi 目录快照（server/data/freeapi.db models 表，enabled=1，2026-10-21）+ 本仓实测（tier-groups.cjs 强档链 / Kilo+Cline 轮换记录）",
+  "note": "id 用网关本地裸名（127.0.0.1:3001/v1/models 里的 id）；upstream 为上游真实 id，仅作溯源。free=true 表示免费档（铁律#1：不接付费）。",
+  "gateway": {
+    "baseUrl": "http://127.0.0.1:3001/v1",
+    "keyEnv": "FREELLMAPI_API_KEY",
+    "probeTimeoutMs": 20000
+  },
+  "quotaNote": {
+    "openrouter": "账号级 free-models-per-day=50，四客户端共享，是最稀缺的额度",
+    "kilo": "Kilo 侧免费副本，多为不限量（rpd=null）",
+    "xkiro": "多模型不限量，链尾成员今天全 429 的风险来自这里",
+    "routeway": "rpd=200",
+    "septor": "rpd=null",
+    "waterfall": "rpd=null",
+    "custom": "自有额度，用完即 drained（今天 glm-5.3/kimi-k2.6 已耗尽）",
+    "radeon": "AMD 原生平台双号直连，目录内 3 个强档"
+  },
+  "taskTiers": {
+    "mechanical": {
+      "label": "机械/批处理活",
+      "prefer": "light",
+      "allowedModelTiers": [
+        "light",
+        "medium",
+        "heavy"
+      ],
+      "machineVerifiable": true,
+      "allowBehaviorChange": false,
+      "examples": [
+        "批量改写/重命名",
+        "摘要",
+        "分类打标",
+        "JSON/字段抽取",
+        "格式修复",
+        "注释补齐",
+        "翻译",
+        "日志归并",
+        "模板填充"
+      ],
+      "rule": "错了一定会被机器立刻抓住（测试/正则/计数/schema）；不许做需要语义判断的活",
+      "acceptance": "必须有机器可判定的验收命令（node --test / lint / 计数比对 / JSON schema）",
+      "requireTools": false
+    },
+    "bounded_code": {
+      "label": "边界清晰的实现",
+      "prefer": "medium",
+      "allowedModelTiers": [
+        "medium",
+        "heavy"
+      ],
+      "machineVerifiable": true,
+      "allowBehaviorChange": true,
+      "examples": [
+        "新模块 + 单测",
+        "小重构",
+        "一次性脚本",
+        "参数解析/CLI 加工具"
+      ],
+      "rule": "允许改行为，但必须自带测试；改完过闸门（verify-gate）+ 另一客户端复核",
+      "acceptance": "自带验收命令 + orchestrator/verify-gate.mjs 全绿",
+      "requireTools": true
+    },
+    "architecture": {
+      "label": "架构/跨文件/协议",
+      "prefer": "heavy",
+      "allowedModelTiers": [
+        "heavy"
+      ],
+      "machineVerifiable": false,
+      "allowBehaviorChange": true,
+      "examples": [
+        "协议/门禁设计",
+        "跨文件重构",
+        "安全审查",
+        "数据模型设计",
+        "四客户端分工设计"
+      ],
+      "rule": "只派强档；低档在此产出会\"看起来对其实错\"的隐性事故",
+      "acceptance": "设计文档 + 回归测试 + 非作者复核",
+      "requireTools": true
+    },
+    "review": {
+      "label": "只读挑错/取证",
+      "prefer": "medium",
+      "allowedModelTiers": [
+        "medium",
+        "heavy"
+      ],
+      "machineVerifiable": false,
+      "allowBehaviorChange": false,
+      "examples": [
+        "代码审查",
+        "只读扫描找茬",
+        "证据取证",
+        "文档复核"
+      ],
+      "rule": "只读；中档起步（漏检比慢更危险），关键安全项升强档",
+      "acceptance": "findings 逐条带原始输出；作者 ≠ 验证者",
+      "requireTools": false
+    },
+    "long_run": {
+      "label": "长任务/守夜/批量回归",
+      "prefer": "medium",
+      "allowedModelTiers": [
+        "medium",
+        "heavy"
+      ],
+      "machineVerifiable": true,
+      "allowBehaviorChange": false,
+      "examples": [
+        "整仓回归",
+        "多轮 CDP 会诊",
+        "批量取证"
+      ],
+      "rule": "中档够用；单轮失败不重复同模型超过 2 次",
+      "acceptance": "日志落 run-events 可回放 + 终态摘要",
+      "requireTools": false
+    }
+  },
+  "models": [
+    {
+      "id": "nemotron-3.5-lightning",
+      "upstream": "nvidia/nemotron-3.5-lightning:free",
+      "platform": "openrouter",
+      "tier": "light",
+      "free": true,
+      "rpd": 50,
+      "tools": true,
+      "ctx": 1048576,
+      "speedRank": 2,
+      "taskKinds": [
+        "summarize",
+        "classify",
+        "batch_rewrite",
+        "format_fix"
+      ],
+      "note": "speed 最快的一档；SWE 能力低（只做机械活）"
+    },
+    {
+      "id": "lfm2.5-2.6b",
+      "upstream": "liquid/lfm-2.5-2.6b:free",
+      "platform": "kilo",
+      "tier": "light",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 32768,
+      "speedRank": 3,
+      "taskKinds": [
+        "classify",
+        "summarize",
+        "template_fill",
+        "translate"
+      ],
+      "note": "2.6B 小模型；kilo 侧不限量 → 优先消耗这里"
+    },
+    {
+      "id": "gemma-4-26b-a4b",
+      "upstream": "google/gemma-4-26b-a4b-it:free",
+      "platform": "openrouter",
+      "tier": "light",
+      "free": true,
+      "rpd": 50,
+      "tools": false,
+      "ctx": 262144,
+      "taskKinds": [
+        "summarize",
+        "classify",
+        "comment_fill"
+      ],
+      "note": "tools=0 → 只能纯文本活（不许工具调用）"
+    },
+    {
+      "id": "gemma-4-31b",
+      "upstream": "google/gemma-4-31b-it:free",
+      "platform": "septor",
+      "tier": "light",
+      "free": true,
+      "rpd": null,
+      "tools": false,
+      "ctx": 262144,
+      "taskKinds": [
+        "summarize",
+        "classify"
+      ],
+      "note": "septor 侧不限量"
+    },
+    {
+      "id": "poolside-laguna-xs-2.1",
+      "upstream": "poolside/laguna-xs-2.1:free",
+      "platform": "kilo",
+      "tier": "light",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 262144,
+      "speedRank": 4,
+      "taskKinds": [
+        "batch_rewrite",
+        "format_fix",
+        "extract_json"
+      ],
+      "note": "kilo 侧 tools=1 不限量 → 低档主力候选"
+    },
+    {
+      "id": "north-small-translate",
+      "upstream": "cohere/north-small-translate:free",
+      "platform": "openrouter",
+      "tier": "light",
+      "free": true,
+      "rpd": 50,
+      "tools": false,
+      "ctx": 32768,
+      "taskKinds": [
+        "translate"
+      ],
+      "note": "翻译专用"
+    },
+    {
+      "id": "north-mini-code",
+      "upstream": "cohere/north-mini-code:free",
+      "platform": "openrouter",
+      "tier": "light",
+      "free": true,
+      "rpd": 50,
+      "tools": true,
+      "ctx": 256000,
+      "taskKinds": [
+        "template_fill",
+        "format_fix"
+      ],
+      "note": "小代码模型，只做模板化生成"
+    },
+    {
+      "id": "sensenova-6.8-flash-lite",
+      "upstream": "sensenova/sensenova-6.8-flash-lite",
+      "platform": "openrouter",
+      "tier": "light",
+      "free": true,
+      "rpd": 50,
+      "tools": true,
+      "ctx": 262144,
+      "taskKinds": [
+        "summarize",
+        "classify"
+      ],
+      "note": "lite 档"
+    },
+    {
+      "id": "gemini-flash-lite",
+      "upstream": "google/gemini-flash-lite",
+      "platform": "google",
+      "tier": "light",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1048576,
+      "taskKinds": [
+        "summarize",
+        "classify",
+        "batch_rewrite"
+      ],
+      "note": "google 免费层 lite"
+    },
+    {
+      "id": "nemotron-parse-2.0",
+      "upstream": "nvidia/nemotron-parse-2.0",
+      "platform": "openrouter",
+      "tier": "light",
+      "free": true,
+      "rpd": 50,
+      "tools": false,
+      "ctx": null,
+      "taskKinds": [
+        "extract_json",
+        "format_fix"
+      ],
+      "note": "解析/结构化抽取专用"
+    },
+    {
+      "id": "nemotron-3.5-content-safety",
+      "upstream": "nvidia/nemotron-3.5-content-safety:free",
+      "platform": "openrouter",
+      "tier": "light",
+      "free": true,
+      "rpd": 50,
+      "tools": false,
+      "ctx": 131072,
+      "taskKinds": [
+        "classify"
+      ],
+      "note": "分类打分专用"
+    },
+    {
+      "id": "nemotron-3-nano-omni-reasoning",
+      "upstream": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "platform": "openrouter",
+      "tier": "light",
+      "free": true,
+      "rpd": 50,
+      "tools": false,
+      "ctx": 262144,
+      "taskKinds": [
+        "classify",
+        "summarize"
+      ],
+      "note": "nano 档"
+    },
+    {
+      "id": "intern-s2",
+      "upstream": "internlm/intern-s2",
+      "platform": "openrouter",
+      "tier": "light",
+      "free": true,
+      "rpd": 50,
+      "tools": false,
+      "ctx": null,
+      "taskKinds": [
+        "classify"
+      ],
+      "note": "检索分类"
+    },
+    {
+      "id": "poolside-laguna-s-2.1",
+      "upstream": "poolside/laguna-s-2.1:free",
+      "platform": "kilo",
+      "tier": "medium",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 262144,
+      "intelligenceRank": 57,
+      "taskKinds": [
+        "new_module",
+        "unit_test",
+        "script",
+        "refactor_small"
+      ],
+      "note": "rank57 = 强档分水岭；kilo 侧不限量"
+    },
+    {
+      "id": "qwen3.8-omni-flash",
+      "upstream": "qwen/qwen3.8-omni-flash:free",
+      "platform": "xkiro",
+      "tier": "medium",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1048576,
+      "intelligenceRank": 31,
+      "taskKinds": [
+        "new_module",
+        "unit_test",
+        "review"
+      ],
+      "note": "1M ctx 不限量"
+    },
+    {
+      "id": "qwen3.8-flash-next",
+      "upstream": "Qwen3.8-Flash-Next",
+      "platform": "radeon",
+      "tier": "medium",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 262144,
+      "intelligenceRank": 27,
+      "taskKinds": [
+        "new_module",
+        "unit_test",
+        "review"
+      ],
+      "note": "radeon 强档（rank27）"
+    },
+    {
+      "id": "deepseek-v4.1-flash",
+      "upstream": "DeepSeek-V4.1-Flash",
+      "platform": "radeon",
+      "tier": "medium",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1048576,
+      "intelligenceRank": 38,
+      "taskKinds": [
+        "new_module",
+        "unit_test",
+        "review"
+      ],
+      "note": "radeon 强档（rank38）"
+    },
+    {
+      "id": "dots3-note-preview",
+      "upstream": "dots-studio/dots-3-note-preview:free",
+      "platform": "kilo",
+      "tier": "medium",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 512000,
+      "intelligenceRank": 35,
+      "taskKinds": [
+        "new_module",
+        "review",
+        "summarize"
+      ],
+      "note": "2026-10-21 Cline 轮换席位；openrouter 副本已耗尽，kilo 副本可用"
+    },
+    {
+      "id": "inkling-small",
+      "upstream": "thinkingmachines/inkling-small:free",
+      "platform": "kilo",
+      "tier": "medium",
+      "free": true,
+      "rpd": 5000,
+      "tools": true,
+      "ctx": 1048576,
+      "intelligenceRank": 55,
+      "taskKinds": [
+        "new_module",
+        "review"
+      ],
+      "note": "agentic 门禁只认 opencode/cline 客户端"
+    },
+    {
+      "id": "qwen3-coder-plus",
+      "upstream": "qwen/qwen3-coder-plus:free",
+      "platform": "xkiro",
+      "tier": "medium",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1048576,
+      "intelligenceRank": 85,
+      "taskKinds": [
+        "new_module",
+        "unit_test",
+        "refactor_small"
+      ],
+      "note": "rank85 偏高，代码向"
+    },
+    {
+      "id": "glm-5.3-flash",
+      "upstream": "glm-5.3-flash:free",
+      "platform": "unorouter",
+      "tier": "medium",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1000000,
+      "intelligenceRank": 23,
+      "taskKinds": [
+        "new_module",
+        "unit_test"
+      ],
+      "note": "rank 低但 1M ctx"
+    },
+    {
+      "id": "qwen3.7-flash",
+      "upstream": "qwen/qwen3.7-flash:free",
+      "platform": "xkiro",
+      "tier": "medium",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1048576,
+      "intelligenceRank": 69,
+      "taskKinds": [
+        "new_module",
+        "unit_test",
+        "review"
+      ],
+      "note": "xkiro 侧不限量"
+    },
+    {
+      "id": "qwen3.6-27b",
+      "upstream": "qwen/qwen3.6-27b:free",
+      "platform": "xkiro",
+      "tier": "medium",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 262144,
+      "intelligenceRank": 65,
+      "taskKinds": [
+        "new_module",
+        "review"
+      ],
+      "note": ""
+    },
+    {
+      "id": "qwen3.8-27b",
+      "upstream": "qwen/qwen3.8-27b",
+      "platform": "xkiro",
+      "tier": "medium",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 262144,
+      "intelligenceRank": 27,
+      "taskKinds": [
+        "new_module",
+        "review"
+      ],
+      "note": ""
+    },
+    {
+      "id": "minimax-m2.7",
+      "upstream": "minimax-m2.7:free",
+      "platform": "routeway",
+      "tier": "medium",
+      "free": true,
+      "rpd": 200,
+      "tools": false,
+      "ctx": 204800,
+      "intelligenceRank": 61,
+      "taskKinds": [
+        "summarize",
+        "review"
+      ],
+      "note": "tools=0 → 纯文本活"
+    },
+    {
+      "id": "mistral-code",
+      "upstream": "mistral-code",
+      "platform": "openrouter",
+      "tier": "medium",
+      "free": false,
+      "rpd": null,
+      "tools": true,
+      "ctx": 256000,
+      "taskKinds": [
+        "new_module"
+      ],
+      "note": "付费档，仅在用户授权付费时用"
+    },
+    {
+      "id": "minimax-m3.1-flash",
+      "upstream": "minimax/minimax-m3.1-flash:free",
+      "platform": "openrouter",
+      "tier": "heavy",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1000000,
+      "intelligenceRank": 48,
+      "taskKinds": [
+        "design",
+        "protocol",
+        "cross_file_refactor",
+        "security_review",
+        "new_module"
+      ],
+      "note": "auto:titan 链首（实测 1.1s + tools）"
+    },
+    {
+      "id": "nemotron-3-ultra-550b",
+      "upstream": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "platform": "openrouter",
+      "tier": "heavy",
+      "free": true,
+      "rpd": 50,
+      "tools": true,
+      "ctx": 1048576,
+      "intelligenceRank": 61,
+      "taskKinds": [
+        "design",
+        "protocol",
+        "cross_file_refactor"
+      ],
+      "note": "ultra 强档；openrouter 副本 rpd=50（省着用），kilo 副本不限量"
+    },
+    {
+      "id": "nemotron-3-super-120b",
+      "upstream": "nvidia/nemotron-3-super-120b-a12b:free",
+      "platform": "openrouter",
+      "tier": "heavy",
+      "free": true,
+      "rpd": 50,
+      "tools": true,
+      "ctx": 1000006,
+      "intelligenceRank": 81,
+      "taskKinds": [
+        "design",
+        "protocol",
+        "cross_file_refactor"
+      ],
+      "note": "super 强档"
+    },
+    {
+      "id": "nvidianemotron-3.5-super-vlfree",
+      "upstream": "nvidia/nemotron-3.5-super-vl:free",
+      "platform": "openrouter",
+      "tier": "heavy",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1000000,
+      "intelligenceRank": 50,
+      "taskKinds": [
+        "design",
+        "review",
+        "vision"
+      ],
+      "note": "Cline 2026-10-21 轮换席位；rank50 免 OpenRouter 50/天 配额"
+    },
+    {
+      "id": "mimo-v2.6-flash",
+      "upstream": "MiMo-V2.6-Flash",
+      "platform": "radeon",
+      "tier": "heavy",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1048576,
+      "intelligenceRank": 57,
+      "taskKinds": [
+        "design",
+        "new_module",
+        "cross_file_refactor"
+      ],
+      "note": "radeon 分水岭基准（rank57），双号直连不限量"
+    },
+    {
+      "id": "deepseek-v4-flash",
+      "upstream": "DeepSeek-V4-Flash",
+      "platform": "radeon",
+      "tier": "heavy",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1048576,
+      "intelligenceRank": 38,
+      "taskKinds": [
+        "new_module",
+        "cross_file_refactor"
+      ],
+      "note": "radeon 强档"
+    },
+    {
+      "id": "qwen3.8-max",
+      "upstream": "qwen/qwen3.8-max:free",
+      "platform": "xkiro",
+      "tier": "heavy",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1048576,
+      "intelligenceRank": 17,
+      "taskKinds": [
+        "design",
+        "review"
+      ],
+      "note": "今天 xkiro 全 429 风险；rank 低只是目录排序"
+    },
+    {
+      "id": "glm-5.3",
+      "upstream": "z-ai/glm-5.3-free",
+      "platform": "custom",
+      "tier": "heavy",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": 1048576,
+      "intelligenceRank": 88,
+      "taskKinds": [
+        "design",
+        "cross_file_refactor"
+      ],
+      "note": "custom 席位：今天额度已耗尽（排链尾）"
+    },
+    {
+      "id": "kimi-k2.6",
+      "upstream": "kimi-k2.6",
+      "platform": "custom",
+      "tier": "heavy",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": null,
+      "taskKinds": [
+        "design"
+      ],
+      "note": "custom 席位：今天额度已耗尽（排链尾）"
+    },
+    {
+      "id": "claude-sonnet-4.6",
+      "upstream": "claude-sonnet-4-6-free",
+      "platform": "custom",
+      "tier": "heavy",
+      "free": true,
+      "rpd": null,
+      "tools": true,
+      "ctx": null,
+      "taskKinds": [
+        "design",
+        "security_review"
+      ],
+      "note": "custom 席位"
+    },
+    {
+      "id": "deepseek-reasoner",
+      "upstream": "deepseek-reasoner",
+      "platform": "openrouter",
+      "tier": "heavy",
+      "free": false,
+      "rpd": null,
+      "tools": true,
+      "ctx": 131072,
+      "taskKinds": [
+        "design"
+      ],
+      "note": "付费档，仅在用户授权付费时用"
+    }
+  ]
+}

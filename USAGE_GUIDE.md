@@ -1,4 +1,4 @@
-# Usage Guide — Ship Your Project Without Writing Code
+# Usage Guide — Multi-AI Collaboration Pipeline: Ship Your Project Without Writing Code
 
 > Written for **non-programmers**. You don't need to know how to code, but you do need to follow the steps below (about 30 minutes of one-time setup).
 
@@ -8,7 +8,7 @@
 
 This is a pipeline of **8 collaborating AIs**:
 
-- **4 web-AI reviewers** (Gemini, DeepSeek, Qwen, plus ChatGPT as final arbiter) — they produce solutions, break work into tasks, and review results
+- **Web-AI reviewers** (Gemini, DeepSeek, Qwen, plus ChatGPT as final arbiter) — they produce solutions, break work into tasks, and review results
 - **4 local coding clients** (deepseek Harness, OpenCode, Cline, Kilo Code) — they write the actual code
 
 You only need to **describe what you want in plain language**; the pipeline handles decomposition, design, coding, and review.
@@ -20,7 +20,7 @@ This is an **Alpha** release. Please confirm you accept:
 - ✅ You do **not** need to write code
 - ✅ You do not need to write documents or draw architecture diagrams
 - ⚠️ But you do need 4 small things: ① install one piece of software ② download and unzip the source ③ type two commands in a terminal ④ talk to an AI client in plain language
-- ⚠️ The 4 web AIs require **free accounts that you register yourself** (about 1 minute each)
+- ⚠️ The web AIs require **free accounts that you register yourself** (about 1 minute each)
 - ⚠️ Currently supported mainly on **Windows**
 
 ## 3. One-time setup (about 30 minutes)
@@ -32,7 +32,7 @@ This is an **Alpha** release. Please confirm you accept:
 
 ### Step 2: Download this project's source
 
-1. Open the repository home page <https://github.com/czfygc/8-AI-Collaborative-Coding-Pipeline>
+1. Open the repository home page <https://github.com/czfygc/multi-ai-collaboration-pipeline>
 2. Click **Code** → **Download ZIP**
 3. Unzip to a folder you like, e.g. `D:\myproject`
 
@@ -54,7 +54,7 @@ The pipeline drives a browser to talk to the web AIs, so it needs a Chrome with 
 1. Double-click `orchestrator\启动 CDP 浏览器.bat`
 2. A Chrome window opens (keep it open — don't close it)
 
-### Step 5: Log in to the 4 web AIs
+### Step 5: Log in to the web AIs
 
 In that Chrome window, open and log in to each (register free accounts if you don't have them):
 
@@ -74,9 +74,9 @@ Example: "I want a pet adoption mini-app."
 1. Open any local AI client (OpenCode, Cline, or Kilo Code — pick one). It's your "assistant".
 2. Tell it in plain language:
 
-> Use this pipeline to build a pet adoption mini-app: users can browse pets available for adoption and submit adoption requests; admins can approve or reject them. First break this into tasks, design it, then write the code, and finally run the eight-party review.
+> Use this pipeline to build a pet adoption mini-app: users can browse pets available for adoption and submit adoption requests; admins can approve or reject them. First break this into tasks, design it, then write the code, and finally run the full-quorum review.
 
-3. The pipeline does the rest: web AIs propose a solution → tasks are decomposed → local clients write code → the eight-party review must pass fully before merging.
+3. The pipeline does the rest: web AIs propose a solution → tasks are decomposed → local clients write code → the full-quorum review must pass fully before merging.
 
 > Tip: the more specific your description, the better the result. You can add "which tech stack (e.g. web app)", "whether it needs login", "visual style", etc.
 
@@ -101,7 +101,7 @@ Example: "I want a pet adoption mini-app."
 - **Alpha**: complex requests may need several rounds of back-and-forth and fine-tuning, not a one-shot perfect delivery
 - **Web AIs change**: these sites often redesign, drop offline, or throttle; the pipeline recovers automatically where it can, but occasionally you'll need to refresh and log in again manually
 - **You need basic computer skills**: install software, unzip, open a terminal, register accounts — all learnable in 10 minutes
-- **Code quality**: goes through an eight-party review, but in Alpha we still recommend you (or someone technical you trust) review before putting it into production
+- **Code quality**: goes through a full-quorum review, but in Alpha we still recommend you (or someone technical you trust) review before putting it into production
 
 ## 8. Advanced (optional): send commands from Telegram on your phone
 
@@ -123,6 +123,40 @@ Notes:
 - The prefix must be `!titan ` (exclamation mark **and** the space), otherwise the bot only answers with usage help
 - Don't send messages too fast (about 10 per minute at most), or Telegram will rate-limit — or ban the bot
 - To stop: end that `python` process. On restart, messages queued while it was down are skipped automatically
+
+## 9. Verify what you received (delivery gates)
+
+If you downloaded a release archive, or want to know whether a folder is really "finished", run the gates. They are honest: they distinguish **passed**, **failed** and **unknown** — "unknown" never counts as passed.
+
+```powershell
+# 1. File list + checksums of the artifact
+node orchestrator/artifact-gate.mjs manifest       --root <dir> --out manifest.json
+node orchestrator/artifact-gate.mjs verify-manifest --root <dir> --manifest manifest.json
+
+# 2. Third-party attribution (LICENSE + NOTICE must be present and cover every dependency)
+node orchestrator/artifact-gate.mjs license         --root <dir>
+
+# 3. Anonymous downloadability of a published asset (URL + expected size + SHA-256)
+node orchestrator/artifact-gate.mjs anon-download   --page <release-url> --download <asset-url> --sha256 <hex> --bytes <n>
+
+# 4. Overall verdict: code / artifact / release are three independent verdicts
+node orchestrator/artifact-gate.mjs stage-gate      --root <dir> --manifest manifest.json --code PASS
+```
+
+Exit codes: `0 = PASS`, `1 = FAIL`, `3 = UNKNOWN`, `2 = usage error`.
+
+Two more helpers worth knowing:
+
+```powershell
+# Which models are alive right now, and which one should take which kind of task
+node orchestrator/model-health.mjs --task mechanical        # weak-but-free tier first
+node orchestrator/model-health.mjs --all --no-probe --json  # offline view, burns no quota
+
+# Keep a long-running job alive even after you close the terminal (Windows)
+node orchestrator/supervisor.mjs add my-job -- node my-job.mjs
+node orchestrator/supervisor.mjs install
+node orchestrator/supervisor.mjs status
+```
 
 ---
 

@@ -1,0 +1,502 @@
+{
+  "schemaVersion": "v1",
+  "generatedAt": "2026-10-21T11:35:51.524Z",
+  "generator": "orchestrator/skill-manifest.mjs",
+  "baseRevision": "c381e5902b45a8c838472764ccc2cf79ff29a02b19037ac7f5b8b016a071fb3f",
+  "skills": [
+    {
+      "name": "diagram-design",
+      "slug": "diagram-design",
+      "version": "2.6.0",
+      "source": {
+        "kind": "vendored",
+        "origin": "cathrynlavery/diagram-design",
+        "ref": "f2f4d49"
+      },
+      "sha256": "76acc2424e5f8cff15d6f0f6b8b68bb1f3decdf5b5a4e44e583354eeacb964f6",
+      "treeSha256": "cbbcf3c810e52efb40cbfc24ae968f46f932f118ccf50bdc87f816e7e3340174",
+      "entrypoints": [
+        "LICENSE",
+        "SKILL.md",
+        "TITAN-NOTES.md",
+        "assets/template-dark.html",
+        "assets/template-full.html",
+        "assets/template.html",
+        "references/animation.md",
+        "references/doctor.md",
+        "references/export-registry.md",
+        "references/export.md",
+        "references/import-drawio.md",
+        "references/import-excalidraw.md",
+        "references/import-mermaid.md",
+        "references/layout-budget.md",
+        "references/onboarding.md",
+        "references/output-spec.md",
+        "references/primitive-annotation.md",
+        "references/primitive-icons.md",
+        "references/primitive-sketchy.md",
+        "references/primitive-terminal.md",
+        "references/primitives-core.md",
+        "references/profiles.md",
+        "references/semantic-patterns.md",
+        "references/style-guide.md",
+        "references/type-architecture-delta.md",
+        "references/type-architecture.md",
+        "references/type-axonometric-plan.md",
+        "references/type-bar.md",
+        "references/type-data-flow.md",
+        "references/type-db-schema.md",
+        "references/type-dependency.md",
+        "references/type-deployment.md",
+        "references/type-dp-integration.md",
+        "references/type-dp-security-matrix.md",
+        "references/type-er.md",
+        "references/type-exploded.md",
+        "references/type-fishbone.md",
+        "references/type-flowchart.md",
+        "references/type-gantt.md",
+        "references/type-heatmap.md",
+        "references/type-high-level.md",
+        "references/type-it-state.md",
+        "references/type-journey.md",
+        "references/type-kanban.md",
+        "references/type-layers.md",
+        "references/type-line.md",
+        "references/type-loop.md",
+        "references/type-medallion.md",
+        "references/type-nested.md",
+        "references/type-org-chart.md",
+        "references/type-polar.md",
+        "references/type-process.md",
+        "references/type-pyramid.md",
+        "references/type-quadrant.md",
+        "references/type-radar.md",
+        "references/type-sankey.md",
+        "references/type-scatter.md",
+        "references/type-sequence.md",
+        "references/type-service-blueprint.md",
+        "references/type-state.md",
+        "references/type-story-map.md",
+        "references/type-swimlane.md",
+        "references/type-timeline.md",
+        "references/type-tree.md",
+        "references/type-treemap.md",
+        "references/type-uml-class.md",
+        "references/type-venn.md",
+        "references/type-wardley.md",
+        "references/type-waterfall.md",
+        "scripts/self_check.py"
+      ],
+      "readOnly": true,
+      "requires": "node, python",
+      "tests": "python .agents/skills/diagram-design/scripts/self_check.py --offline diagram.html",
+      "provenance": "vendored:cathrynlavery/diagram-design#f2f4d49",
+      "description": "Create branded architecture, architecture delta, IT current-state, flowchart, sequence, state machine, ER/data model, timeline, swimlane, quadrant, radar/spider, polar chart (polar/radial lollipop), loop/flywheel, nested, tree, org chart, layer stack, exploded axonometric, axonometric plan, Venn, pyramid/funnel, treemap and marimekko, heatmap, bar and dumbbell, waterfall, line (slopegraph, ridgeline, streamgraph, bump), Gantt and scatter charts (bubble, beeswarm), high-level, process, medallion, data flow, DP integration, DP security matrix, Sankey, fishbone, Wardley map, kanban, user journey, service blueprint, deployment, dependency graph, UML class, story map, or database schema diagrams as HTML/SVG/PNG, with .drawio, Mermaid, and .excalidraw import, plus lifecycle phase maps, block decomposition trees, and onboarding guidance."
+    },
+    {
+      "name": "titan-cdp-browser-ops",
+      "slug": "titan-cdp-browser-ops",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "aa1217622d449bac09389b7bba95726541151036e9b47660b2fcb0f4991637a1",
+      "treeSha256": "803c67c677309480b27080f99a0aa2c045a16e2d72febff9b38f60829afd7c31",
+      "entrypoints": [
+        "SKILL.md",
+        "浏览器操作实例-20261011-Cline.md"
+      ],
+      "readOnly": true,
+      "requires": "node, cdp-browser-9222, playwright-core",
+      "tests": "manual: 用 cdp-drv.mjs 开一个标签页并回读标题",
+      "provenance": "original",
+      "description": "Use when operating the TITAN CDP browser (127.0.0.1:9222) to drive web dashboards (Cloudflare / katabump / 任何站点), register accounts or free subdomains, automate multi-step wizards (add-site / DNS / API token / 表单), or when a task needs browser clicks/fills beyond curl+API. Includes cdp-drv.mjs v2 (new/close/shot/#id精确选tab/auto-IIFE), CDP HTTP endpoints, Playwright MCP (@playwright/mcp via --cdp-endpoint) + playwright-core, inject-secret/xhr-spy helpers, API-first principle, pitfalls library (SPA/React/OAuth/DigitalPlat), web-seat ops & capture-timing diagnosis (reviewers.yaml single source), security rules (M7). 完整实战源档见同目录 浏览器操作实例-20261011-Cline.md。维护授权见文末。"
+    },
+    {
+      "name": "titan-cleanup",
+      "slug": "titan-cleanup",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "a75048564846ec9d5e35fff1195e4928e2d7e4e4b93ab2007663482a7e3378ca",
+      "treeSha256": "cc9903da4c63f02dbcd89bab7f3ec1e0b46c2aa0535cb57eb1dbec5c921b7e40",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "node, git",
+      "tests": "manual: 按清理清单逐项执行并用 git status 复核",
+      "provenance": "original",
+      "description": "Use when the TITAN workspace needs a periodic consolidation cleanup (大扫除): reclaim disk space, tidy the knowledge base and the archive, without losing rules, ledger entries or evidence. Covers what is safely deletable, what needs user confirmation first, and where leftovers must be moved. Triggers: 大扫除 / 整合清理 / 腾空间 / 清理硬盘 / cleanup."
+    },
+    {
+      "name": "titan-code-review",
+      "slug": "titan-code-review",
+      "version": "1.0.0",
+      "source": {
+        "kind": "adapted",
+        "origin": "mattpocock/skills",
+        "ref": "unversioned-MIT"
+      },
+      "sha256": "733c767fd55dee39174bf35d62e20b04d970c1dd6f38745ae9d7403ceef8ce6f",
+      "treeSha256": "351b9d2e0db3e29561662a9aa46b76dd31e343007c8bbf5541bd567332f2f670",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "none",
+      "tests": "manual: 拿一个真实 diff 跑双轴评审并核对 Standards 与 Spec 两侧结论",
+      "provenance": "adapted:mattpocock/skills#unversioned-MIT",
+      "description": "Use when reviewing a branch, PR, or work-in-progress diff, or when the user says '评审' / '复查改动' / 'review since X' / '能不能合'. Runs TITAN's two axes — Standards (AGENTS.md + repo conventions + Fowler smell baseline) and Spec (ISSUE_REGISTRY task + design spec) — as parallel sub-agents, reported side by side without reranking."
+    },
+    {
+      "name": "titan-cross-session-memory",
+      "slug": "titan-cross-session-memory",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "7f5ad0b47bdaa1384acf48e802470f21ce3599757d3f9620619f023fa6991bfb",
+      "treeSha256": "07c3109505c3807fa16256ba7f6d4717b90934e92fd80eeb4d99b448f354e781",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "titan-memory-mcp",
+      "tests": "node titan-memory/test.mjs",
+      "provenance": "original",
+      "description": "Use for cross-conversation persistent memory in TITAN: save a named memory ('做跨对话持久记忆，命名X' / '记住X' / '持久记忆X') with memory_remember, or load/recall it in any later session ('加载X' / '调出X' / '用跨对话持久记忆加载X') with memory_recall. Works regardless of model."
+    },
+    {
+      "name": "titan-diagnosing-bugs",
+      "slug": "titan-diagnosing-bugs",
+      "version": "1.0.0",
+      "source": {
+        "kind": "adapted",
+        "origin": "mattpocock/skills",
+        "ref": "unversioned-MIT"
+      },
+      "sha256": "7982b7f60f3ca9f53e24ef5fa3fb9f5c60247bb4eaaaf1b22684645f583b0637",
+      "treeSha256": "37f4f89eac46c548019be8b5a2e8abbefc5a93440873b9d233a30098b29022cb",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "none",
+      "tests": "manual: 造一个可复现的失败用例并走完诊断闭环",
+      "provenance": "adapted:mattpocock/skills#unversioned-MIT",
+      "description": "Use for hard bugs and performance regressions, or when the user says '诊断' / '查这个 bug' / '为什么报错' / '变慢了'. TITAN diagnosis loop: build a red-capable feedback loop first, minimise, rank falsifiable hypotheses, instrument one variable at a time, fix with a regression test, then clean up and archive evidence."
+    },
+    {
+      "name": "titan-four-party-consult",
+      "slug": "titan-four-party-consult",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "3b8a3eea26087462b7c4b101067c19f3e10054b15d3f9ff7b6aaf31156883c7c",
+      "treeSha256": "c5eb0cd8dae8369576c8c39d9d4f500dd702e8f452d968ab727e92c6c05066b8",
+      "entrypoints": [
+        "SKILL.md",
+        "tools/_probe_chatgpt.mjs",
+        "tools/_reload_chatgpt.mjs",
+        "tools/_try_turnstile.mjs",
+        "四方会诊_SOP.md"
+      ],
+      "readOnly": true,
+      "requires": "cdp-browser-9222, reviewers.yaml",
+      "tests": "manual: 对一份 fixture 报告跑四席会诊并检查 delta.md",
+      "provenance": "original",
+      "description": "Use when the user says '4 会诊' / '四方会诊' / 'four-party consult' / 'multi-review dispatch' / 'cross-model review', or when a TITAN artifact (report, code, spec, decision) needs independent cross-model review. Dispatches to three independent reviewers (Gemini / DeepSeek / Qwen) via CDP, preserves raw findings losslessly (Layer A), detects conflicts and blind spots, produces architect-grade decision input (Layer B / delta.md), which is then consumed by ChatGPT as the fourth party (Research Architect). Protocol-driven; reviewers and perspectives configurable via reviewers.yaml."
+    },
+    {
+      "name": "titan-grilling",
+      "slug": "titan-grilling",
+      "version": "1.0.0",
+      "source": {
+        "kind": "adapted",
+        "origin": "mattpocock/skills",
+        "ref": "unversioned-MIT"
+      },
+      "sha256": "403ac1ca37c9cf2e61fbf3a64499c46d66b3dce9f673cded29206649a3049b3d",
+      "treeSha256": "050b005b1a1452915be8f1857d2a60520fda2911936e2f17dbaaea1f369bb201",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "none",
+      "tests": "manual: 对一个模糊需求跑满一轮 design tree",
+      "provenance": "adapted:mattpocock/skills#unversioned-MIT",
+      "description": "Use when a plan, design, or requirement is ambiguous and needs stress-testing before work starts, or when the user says '盘问我' / '格栅' / '把需求问清楚' / 'grill me'. Runs rounds of the design tree: ask the whole current frontier at once, each numbered with a recommended answer, wait for answers, recompute, repeat until no branch is silently assumed."
+    },
+    {
+      "name": "titan-handoff",
+      "slug": "titan-handoff",
+      "version": "1.0.0",
+      "source": {
+        "kind": "adapted",
+        "origin": "mattpocock/skills",
+        "ref": "unversioned-MIT"
+      },
+      "sha256": "ef7fbdfeb927c6f9ded8f0952b397bcc4c926586a332ae12cfa482916f35cdef",
+      "treeSha256": "7e6db792f7841b7e8748dd53845aafc0a877de0c96157f2aa1a66f5b24d43d11",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "none",
+      "tests": "manual: 把一次会话压成交接文档并核对要点齐全",
+      "provenance": "adapted:mattpocock/skills#unversioned-MIT",
+      "description": "Use when compacting the current conversation into a handoff document for another agent or a new session, or when the user says '交接' / '写交接文档' / '换个会话继续'. Covers what to include, where to save it, and the TITAN M3 rules (commit WIP or set ledger todo/blocked, save reusable conclusions to shared memory)."
+    },
+    {
+      "name": "titan-headless-clients",
+      "slug": "titan-headless-clients",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "2de71465c3544c5d83362e0306f937355376fde1995ef07ee2747f31d3a274af",
+      "treeSha256": "e6d7d0e051c667eda1596bec9523222dc0e3aff34e5dea73008e9ceab4cce089",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "node, windows-shell",
+      "tests": "manual: 对四客户端各跑一条无害命令确认可回读",
+      "provenance": "original",
+      "description": "Use when background-invoking any of the four TITAN clients from another client ('后台调用 Cline/OpenCode/Kilo/Harness' / 'headless 跑一下客户端' / '让 X 客户端在后台执行、扫描、验收'). Gives binary paths, tested command lines, cross-invocation matrix and red lines so no session has to rediscover them. Works from any of the 4 clients."
+    },
+    {
+      "name": "titan-multi-review-dispatch",
+      "slug": "titan-multi-review-dispatch",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "4e53aed9acae85ebb3598ade15a4a03c78f34f47da7ee2c573ff491cafb8b55f",
+      "treeSha256": "ae7434e25819e3f68a42a45fa8ce8bba5bb6787c82b60d0b8771c26938ba1fdf",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "cdp-browser-9222",
+      "tests": "manual: 与 titan-four-party-consult 同源验证",
+      "provenance": "original",
+      "description": "Alias for titan-four-party-consult. See that Skill."
+    },
+    {
+      "name": "titan-parallel-delegation",
+      "slug": "titan-parallel-delegation",
+      "version": "1.1.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "356c0fb66fa019012ef4b04fcd6bb7313e34550878dabb74a38b2537613b5104",
+      "treeSha256": "ea94745af39fd87600312f63d54d76e62be939106bb3a420e20de4ba2b2c4073",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "node, git",
+      "tests": "manual: 跑一次并行分单（两单路径不重叠）并按协议收割归口",
+      "provenance": "original",
+      "description": "Use when a task is big enough to split across the 4 TITAN clients (OpenCode / Cline / Kilo / DeepSeek Harness) and you want them working at the same time without stepping on each other, or when you are about to hand a sub-task to another client. Covers: how to split by FILE OWNERSHIP (no path overlap), who may touch git, who verifies whom, how to probe a model BEFORE dispatching (free-tier quota is the real bottleneck), the delegation prompt skeleton that works, and the two local traps (background processes get killed; Cline's isolated data-dir providers.json gets reset). Triggers: 并行 / 委派 / 分给别的客户端 / 多客户端协作 / 派活 / delegation / parallel."
+    },
+    {
+      "name": "titan-plugin-mining",
+      "slug": "titan-plugin-mining",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "b6f12fa77abcb30045087286730867de6e1842c78f1b87955e91634a1d284d8e",
+      "treeSha256": "ad656c45499e2932d9781e0d4a27c32c0f9023df75299defacb4dfd14e5702d8",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "none",
+      "tests": "node --test orchestrator/test/skill-manifest.test.mjs",
+      "provenance": "original",
+      "description": "T-148 \"只挖插件/技能\" 的挖掘记录与 M5 许可审查：梳理 cursor/plugins（跨客户端 .cursor-plugin 规范）与 claude-plugins-official（skills/commands）的结构、许可、与 V2 .agents/skills/ 的映射；不直接 vendor 第三方技能原文，只借鉴规范模式，入库前逐 plugin 读 LICENSE 确认。"
+    },
+    {
+      "name": "titan-publish-sync",
+      "slug": "titan-publish-sync",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "ece8866f3696d2dee3a20b6bca6e1b5e37768c22acd1cb81ad79e4b7626ef00d",
+      "treeSha256": "3e5b70f4f39b119fc4527630df0c70b8e48c8e2d414371de298701be78bf8ef6",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "node, git",
+      "tests": "node --test orchestrator/test/publish-sync.test.mjs",
+      "provenance": "original",
+      "description": "Use when syncing the local repo to the publish tree / GitHub public repo ('更新发布树' / '同步发布' / '推 GitHub' / '发布树还差什么' / 'publish sync' / 'PUBLISH_SYNC'). Defines MUST-sync (V2 pipeline logic chain, desensitized) vs NEVER-sync (ISSUE_REGISTRY.json class), and the SOP over the three markers: PUBLISH_SYNC.json ledger + orchestrator/publish-sync.mjs + publish-tree PUBLISH_MANIFEST.json."
+    },
+    {
+      "name": "titan-quant-tool-discipline",
+      "slug": "titan-quant-tool-discipline",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "dce7ba0f2b960689532a11361bfda1e98c4ab2184c2b7f2bb32a1c0986e96e3d",
+      "treeSha256": "13136791a2dbd43c21af45a0c18dfac5797716f1079f18ac65ab4127948b8603",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "quant-mcp",
+      "tests": "manual: 对一个点位检查题走专用工具优先流程",
+      "provenance": "original",
+      "description": "Use for TITAN quantitative research tool selection: dedicated specialist tools first for point-in-time checks, series/data quality, walk-forward OOS validation, trading costs, deflated Sharpe, parameter sensitivity, research pipelines, and structured charts. Preserve UNKNOWN and report fallback limitations."
+    },
+    {
+      "name": "titan-registry-edit",
+      "slug": "titan-registry-edit",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "b3d667a0b6503deca0ee016532f281e57d44bd8ea3b315a873526912fa9ef585",
+      "treeSha256": "17d8547b9e47c8ed09622f99056d2b68de5f84befbee2788a587b842bfb2e49c",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "node",
+      "tests": "node orchestrator/pre-commit-check.mjs",
+      "provenance": "original",
+      "description": "在 ISSUE_REGISTRY.json 中新增/更新台账条目，自动处理 JSON 转义、逗号、括号、时间戳，四客户端统一调用，避免手工拼接 JSON 导致的语法错误。配合 orchestrator/pre-commit-check.mjs 做提交前校验。Works from any of the 4 clients."
+    },
+    {
+      "name": "titan-review-channels",
+      "slug": "titan-review-channels",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "3d1279a8c6f3abb438ecae8288dcc2aee4ba4f938c027ba5f194ce5a05c5541b",
+      "treeSha256": "83cc6b4aa62fd7551cff093c9922233c0c368d3e43f7651f09ee3beac1ded92a",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "node, cdp-browser-9222",
+      "tests": "manual: 对一个错误案例选通道并核对选型表",
+      "provenance": "original",
+      "description": "Use when choosing an error-hunting or review channel: '四方会诊' (web 4 AI seats) vs '本地验证' (local 4 clients, ordered calls) vs '8方查错' (both combined) — 查错通道选型 / 派谁去评审或验收 / 要不要派网页席或本地客户端 / 四方会诊 vs 本地验证 vs 8方查错。Gives the taxonomy, local call order, and red-line pointers (details live in the linked skills)."
+    },
+    {
+      "name": "titan-search-then-interrogate",
+      "slug": "titan-search-then-interrogate",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "3550c35042ae2aabe0d6c84d00745c94ac054624c4fd853b21517f8ed550c709",
+      "treeSha256": "7a4a7cee0c56ea9046ba1547df30113042838b672ab9cb687438756445afc9bd",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "cdp-browser-9222",
+      "tests": "manual: 对一个未知报错先搜后问并记录共识",
+      "provenance": "original",
+      "description": "Use when hitting an unknown error/problem during TITAN work ('为什么报错'/'这什么坑'/'先搜后问'), or the user says '先 Google 搜'/'把网页 AI 都问一遍'/'交叉审问'. Workflow: ① search engine first (DuckDuckGo html via webfetch, Google via CDP), collect leads from community threads > official docs; ② if inconclusive, cross-interrogate ALL logged-in web AI seats in the CDP browser (DeepSeek/Qwen/Gemini/ChatGPT/Grok) with the same facts-first prompt; ③ synthesize consensus vs conflict; ④ decide. Mandatory research channel per user directive 2026-10-11. Includes seat table, prompt template, secret-scrubbing red lines, and the 2026-10-11 cf2-522 worked example."
+    },
+    {
+      "name": "titan-tdd",
+      "slug": "titan-tdd",
+      "version": "1.0.0",
+      "source": {
+        "kind": "adapted",
+        "origin": "mattpocock/skills",
+        "ref": "unversioned-MIT"
+      },
+      "sha256": "eded80b31bf5b8dd6eabcdc6fcdd326acd2cbd8834b6652dba94993df305f615",
+      "treeSha256": "c5dcd6fdbf02128d6f38c44cc0e7468f279728fa1e860ba9b0ec333e8595e0bb",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "node",
+      "tests": "manual: 走一次红绿重构并确认测试已进 SUITES.md",
+      "provenance": "adapted:mattpocock/skills#unversioned-MIT",
+      "description": "Use when building a feature or fixing a bug test-first, or when the user says 'TDD' / '红绿重构' / '先写测试' / '加回归测试'. TITAN red-green-refactor: confirm seams, one vertical slice per cycle, tests land in orchestrator/test/ and are listed in SUITES.md; every fix commit carries a regression test (R1)."
+    },
+    {
+      "name": "titan-test-runner",
+      "slug": "titan-test-runner",
+      "version": "1.0.0",
+      "source": {
+        "kind": "adapted",
+        "origin": "suimi8/dsh-test-runner",
+        "ref": "unversioned-MIT"
+      },
+      "sha256": "646f501524d777fa5b1ae134344aa70f1d2b28a4ebc8267a90f6e094b69c8513",
+      "treeSha256": "991b731c4a361a48bc42bbf3d104fedebc03579c35efdbd6c9dcaf52b3f41cdf",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "node, git",
+      "tests": "node --test orchestrator/test/run-tests.test.mjs",
+      "provenance": "adapted:suimi8/dsh-test-runner#unversioned-MIT",
+      "description": "Use when you need to run a project's tests and read only a compact structured result instead of the whole raw output (改代码→跑测试→修 的快闭环). Auto-detects vitest / jest / pytest / node:test / npm test, runs the suite, and returns pass-fail counts plus the failing case names and error lines as JSON or a short text summary. Use when the user says 跑测试 / 跑一下测试 / 测试失败 / test_run / 看看测试结果, or when you are fixing a failing test and want the failure list without scrolling megabytes of log. Works from any of the 4 TITAN clients (OpenCode / Cline / Kilo / DeepSeek Harness)."
+    },
+    {
+      "name": "titan-unknown-exploration",
+      "slug": "titan-unknown-exploration",
+      "version": "1.0.0",
+      "source": {
+        "kind": "original",
+        "origin": "",
+        "ref": ""
+      },
+      "sha256": "eedbaedaf37712d9c2add01d86d46d51cbc96cecf01abe8042e204eec6235bdf",
+      "treeSha256": "a4db6b3e268735c46c81e0204a9d6543e5c85206357f2ee0005ea38ce7b7df00",
+      "entrypoints": [
+        "SKILL.md"
+      ],
+      "readOnly": true,
+      "requires": "cdp-browser-9222, yt-dlp",
+      "tests": "manual: 对一个未知对象走完五级证据阶梯",
+      "provenance": "original",
+      "description": "Use when you need to learn something that is not already in this repo — unknown APIs, new services, video/document content, unfamiliar tools, or a design decision with no precedent. Provides a numbered SOP from cheap local lookups through search engines, browser/CDP evidence extraction (including signed-URL and subtitle tricks), multi-source cross-verification, escalation to the 5-seat web council (4 reviewers + ChatGPT architect), and the write-back discipline. 未知事物探寻 SOP：本地→搜索引擎→站点取证→交叉验证→五席会诊→沉淀落盘。"
+    }
+  ]
+}

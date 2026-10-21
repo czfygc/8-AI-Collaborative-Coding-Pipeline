@@ -1,0 +1,40 @@
+{
+  "version": "v1-r4",
+  "note": "T-153/T-164：verify 命令注册槽（拆分计划 §4 R4）。纯数据，不执行；消费方 orchestrator/lib/verify-profiles.mjs。{file} 占位符在调用时替换为目标文件。",
+  "languages": {
+    "js": "node:mjs",
+    "py": "python:pkg"
+  },
+  "profiles": {
+    "node:mjs": {
+      "description": "Node.js ESM/CJS 源文件（.mjs/.js/.cjs）",
+      "syntax": {
+        "command": ["node", "--check", "{file}"],
+        "kind": "node-check"
+      },
+      "test": {
+        "command": ["node", "--test"],
+        "kind": "node-test"
+      }
+    },
+    "python:pkg": {
+      "description": "Python 包（.py）；syntax 用 ast.parse 而非 py_compile——py_compile 会在源码旁写 __pycache__，污染被检仓并触发执行器范围违规",
+      "syntax": {
+        "command": ["python", "-c", "import ast,sys;ast.parse(open(sys.argv[1],encoding='utf-8').read())", "{file}"],
+        "kind": "python-ast"
+      },
+      "test": {
+        "command": ["python", "-m", "pytest", "-q"],
+        "kind": "python-pytest"
+      }
+    }
+  },
+  "capabilities": ["syntax", "test"],
+  "unknownPolicy": "profile 或 capability 缺失 → 返回 UNKNOWN（显式），绝不静默当作通过；UNKNOWN 不等于 FAIL（由调用方决定是否阻断）",
+  "env": {
+    "python:pkg": {
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "PYTEST_ADDOPTS": "-p no:cacheprovider"
+    }
+  }
+}

@@ -157,13 +157,14 @@ function getIntFlag(flag, def) {
   return n;
 }
 
-// ---------- MODES 分发表（R1 预留接口层，T-61 P9 注册；拆分期只登记不实现） ----------
-// 注册点：CLI 解析出的 mode → 分发描述（kind=active 现有实装 / kind=stub 为 P11/P12 生命周期
-// 模式占位）。注册纪律：任何新模式必须先入表——下方"模式未注册守卫"强制；stub 命中即打印
-// 未实现提示并退出 0（与 R3 taskType 的未实现退出 0 口径一致，便于 OpenClaw 探活）。
-// 注：OpenClaw intent 解码器的惰性 import 形态属拆后 P10/P12 实装；拆分期维持顶部静态 import，
-// 避免模式间加载时序差异（P-19 __dirname TDZ 教训）。
-const PIPELINE_STUB_MODES = ['design', 'plan', 'implement', 'deliver', 'pipeline'];
+// ---------- MODES 分发表（R1 生命周期模式；T-162 起 design/plan/implement/deliver/pipeline 为实装） ----------
+// 注册点：CLI 解析出的 mode → 分发描述（kind=active 现有实装）。注册纪律：任何新模式必须先入表
+// —— 下方"模式未注册守卫"强制。
+// T-162 实装口径：五个生命周期模式**框架真、内容源按可用性降级**——阶段产物落
+// reviews/pipeline-<id>/stage-0N-<stage>/stage.json（字段名沿用 R2 冻结名），
+// 每份产物带 evidenceLevel（real / local-placeholder / pending），不谎报完成。
+const PIPELINE_MODES = ['design', 'plan', 'implement', 'deliver', 'pipeline'];
+const PIPELINE_STUB_MODES = PIPELINE_MODES; // 兼容旧变量名（mode 选择链沿用）
 const MODES = {
   help: { kind: 'active', dispatch: '入口内联 help 块' },
   probe: { kind: 'active', dispatch: 'main() probe 分支' },
@@ -177,11 +178,11 @@ const MODES = {
   'decision-api': { kind: 'active', dispatch: 'main() 早退分支' },
   'ensure-tabs': { kind: 'active', dispatch: 'main() 前置（可与任意模式组合）' },
   scan: { kind: 'active', dispatch: '顶层 if → lib/scan-entry.mjs runScanEntry' },
-  design: { kind: 'stub', dispatch: '未实现：退出 0（P12 pipeline stage-01 预留）' },
-  plan: { kind: 'stub', dispatch: '未实现：退出 0（P12 pipeline stage-02 预留）' },
-  implement: { kind: 'stub', dispatch: '未实现：退出 0（P12 pipeline stage-03 预留）' },
-  deliver: { kind: 'stub', dispatch: '未实现：退出 0（P12 pipeline stage-04 预留）' },
-  pipeline: { kind: 'stub', dispatch: '未实现：退出 0（P12 串链预留）' },
+  design: { kind: 'active', dispatch: 'lib/pipeline-stage.mjs stage-01（需求→设计简报）' },
+  plan: { kind: 'active', dispatch: 'lib/pipeline-stage.mjs stage-02（设计→实施计划+执行单）' },
+  implement: { kind: 'active', dispatch: 'lib/pipeline-stage.mjs stage-03（计划→执行单交付给 titan-execute）' },
+  deliver: { kind: 'active', dispatch: 'lib/pipeline-stage.mjs stage-04（交付摘要+产物索引）' },
+  pipeline: { kind: 'active', dispatch: 'lib/pipeline-stage.mjs 四阶段串链（失败即停并落证据）' },
 };
 
 // Step 0: Determine review mode from --mode flag (if present)
@@ -225,6 +226,26 @@ let reviewPath = null;
 let analyzeId = null;
 let architectId = null;
 let scanFile = null;
+
+// ---------- R7 目标仓库参数（拆后实装）+ R5 血缘字段校验 ----------
+// 必须在 mode 选择链之前解析：--scan 的越界判据要看有效根（--repo 或 TITAN_ROOT）。
+const repoRaw = getFlagValue('--repo');
+let repoOverride = null;
+if (repoRaw !== null) {
+  const repoCheck = validateRepoRoot(repoRaw);
+  if (!repoCheck.ok) { console.error('ERROR: ' + repoCheck.reason); process.exit(1); }
+  repoOverride = repoCheck.root;
+  console.log('[R7] --repo 目标仓已登记: ' + repoOverride + '（标记: ' + repoCheck.marker + '；产物仍落主仓 reviews/）');
+}
+const effectiveRoot = repoOverride || TITAN_ROOT;
+
+// R5：stage/project 枚举与字符集校验（非法即拒，不静默吞掉）
+const stageCheck = validateStage(getFlagValue('--stage'));
+if (!stageCheck.ok) { console.error('ERROR: ' + stageCheck.reason); process.exit(1); }
+const projectCheck = validateProject(getFlagValue('--project'));
+if (!projectCheck.ok) { console.error('ERROR: ' + projectCheck.reason); process.exit(1); }
+// project 缺省时按 --repo 仓名派生（T-165 派生规则）
+const lineageProject = projectCheck.value || deriveProjectFromRepo(repoOverride);
 
 // 连运标记：bare flag 形式（--review <path> --analyze）时由 --review 主流程结束后依次触发。
 // mode 选择链中 --review 优先，故 bare flag 不会抢夺独立模式（--analyze <id> 单独跑时 mode='analyze' 提前 return）。
@@ -272,18 +293,27 @@ if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
 } else if (PIPELINE_STUB_MODES.some(m => args.includes('--' + m))) {
    // R1（T-61 P9）：design/plan/implement/deliver/pipeline 五 key 注册同一 stub（只注册不实现）
    mode = PIPELINE_STUB_MODES.find(m => args.includes('--' + m));
-} else if (args.includes('--scan')) {
-   // Step 4: 8 方并行扫描入口（实现于 scan-flow.mjs；网页/harness 席位见 T-40）
-   mode = 'scan';
-   scanFile = getFlagValue('--scan');
-   if (!scanFile) { console.error('ERROR: --scan 需要文件路径'); process.exit(1); }
-   const scanFileAbs = normalizePath(resolvePath(scanFile));
-   const titanRootNormalized = normalizePath(TITAN_ROOT);
-   if (!scanFileAbs.startsWith(titanRootNormalized + pathSep)) {
-        console.error('ERROR: --scan 路径必须在 TITAN_ARCHAEOLOGY 工作区内');
-        process.exit(1);
-   }
-} else if (args.some(a => a === '--mode' || a.startsWith('--mode='))) {
+  } else if (args.includes('--scan')) {
+    // Step 4: 8 方并行扫描入口（实现于 scan-flow.mjs；网页/harness 席位见 T-40）
+    mode = 'scan';
+    scanFile = getFlagValue('--scan');
+    if (!scanFile) { console.error('ERROR: --scan 需要文件路径'); process.exit(1); }
+    // T-167（R7 实装）：有效根 = --repo（若给）否则 TITAN_ROOT；越界判据沿用 DELTA-012 口径。
+    // 目录目标 → 展开成源文件清单（--scan 本身支持逗号分隔多文件）。
+    const targets = scanFile.split(',').map(s => s.trim()).filter(Boolean);
+    const expanded = [];
+    for (const t of targets) {
+      const abs = normalizePath(resolvePath(t));
+      const within = assertWithinRoot(abs, effectiveRoot);
+      if (!within.ok) { console.error('ERROR: --scan ' + within.reason); process.exit(1); }
+      const ex = expandScanTarget(abs, { root: effectiveRoot });
+      if (!ex.files.length) { console.error('ERROR: --scan 目标无可扫文件: ' + abs); process.exit(1); }
+      if (ex.truncated) console.log('[R7] 目录展开达到上限（' + ex.files.length + ' 个文件），请收窄目标目录');
+      expanded.push(...ex.files);
+    }
+    scanFile = expanded.join(',');
+    if (repoOverride) console.log('[R7] scan 目标落在外仓 ' + repoOverride + '（产物落主仓 reviews/）');
+  } else if (args.some(a => a === '--mode' || a.startsWith('--mode='))) {
   // Step 4: 模式切换 —— role (角色化) | scan (代码扫描)
   const m = getFlagValue('--mode');
   if (!m || !['role', 'scan'].includes(m)) {
@@ -317,12 +347,10 @@ if (uploadFlag && mode !== 'review') {
 const reviewRound = getIntFlag('--round', 1);
 const parentDispatchId = getFlagValue('--parent') || null;
 const trigger = getFlagValue('--trigger') || 'MANUAL';
-// R5 预留接口层（T-61 C-11 注册，计划 §4 R5）：产物血缘可选字段——全流程链式追溯 +
-// V8 多项目分桶的服务槽。拆分期只登记不实现：不校验枚举、不参与任何路由行为，
-// 缺省 null；写入 dispatch-meta.json 后由读取端按"未知字段容错忽略"处理（analyze 等
-// 只取自有字段）；枚举收紧（design|plan|scan|fix|implement|deliver）属 P11/P12 实装。
-const lineageStage = getFlagValue('--stage') || null;
-const lineageProject = getFlagValue('--project') || null;
+// R5 血缘字段（T-165 实装）：stage/project 已在 mode 选择链之前校验（非法即拒）；
+// 缺省 null；写入 dispatch-meta.json 后由读取端（lib/lineage.mjs）按"未知字段容错忽略"处理。
+// project 缺省时按 --repo 仓名派生（见上 lineageProject）。
+const lineageStage = stageCheck.value;
 // T-07 P0: decision-api 监听端口。3001=FreeLLMAPI 网关、3002=mcp-proxy，3003 起避开
 const decisionPort = getIntFlag('--decision-port', 3003);
 
@@ -366,41 +394,29 @@ console.log('TITAN Multi-Review Dispatch — Orchestrator');
   process.exit(0);
 }
 
-// ---------- MODES 守卫与 stub 分发（T-61 P9/R1：只注册不实现） ----------
+// ---------- MODES 守卫 + 生命周期模式分发（T-162：R1 实装） ----------
 if (!MODES[mode]) {
   console.error('ERROR: 模式未注册于 MODES 分发表（R1）：' + mode);
   process.exit(1);
 }
-if (MODES[mode].kind === 'stub') {
-  if (ensureTabsFlag) console.log('[WARN] --ensure-tabs 与预留模式 ' + mode + ' 组合无效（该模式未实现，不依赖 CDP），已忽略');
-  console.log('[MODES] 模式 ' + mode + ' 已注册但未实现（R1 预留，见设计规范 P11/P12：V8/外仓支持 + 全流程自动化）。');
-  process.exit(0);
+if (PIPELINE_MODES.includes(mode)) {
+  if (ensureTabsFlag) console.log('[WARN] --ensure-tabs 与生命周期模式 ' + mode + ' 组合无效（不依赖 CDP），已忽略');
+  const { runPipelineMode } = await import('./lib/pipeline-runner.mjs');
+  const code = await runPipelineMode({ mode, args, getFlagValue, repoRoot: effectiveRoot, project: lineageProject, stage: lineageStage });
+  process.exit(code);
 }
 
-// ---------- R7 预留接口层（T-61 C-11 注册，计划 §4 R7）：目标仓库解析位 ----------
-// 供 V8/P1_A 类外部仓扫描/实施参数化。拆分期纪律="只登记不实现"：本块仅解析+校验+登记，
-// repoOverride 无任何消费者——TITAN_ROOT 仍是唯一工作根，全部执行路径不变；"多仓 root 校验、
-// scan 全仓接"（含文件级越界拒绝）属拆后 P11 在消费点实装。越界判据同 --review/--scan
-// （path.relative + isAbsolutePath，DELTA-012 口径）：此处仅用于登记日志的工作区内/外分类。
-const repoOverride = (() => {
-  const raw = getFlagValue('--repo');
-  if (raw === null) return null;
-  if (!isAbsolutePath(raw)) {
-    console.error('ERROR: --repo 需要绝对路径（<abs>）');
-    process.exit(1);
-  }
-  const abs = normalizePath(resolvePath(raw));
-  if (!existsSync(abs) || !statSync(abs).isDirectory()) {
-    console.error('ERROR: --repo 必须指向已存在的目录: ' + abs);
-    process.exit(1);
-  }
-  const relToTitan = relativePath(normalizePath(TITAN_ROOT), abs);
+// ---------- R7 目标仓库（T-167 实装） ----------
+// 解析与校验已提前到 mode 选择链之前（--scan 的越界判据要看有效根）；此处只做登记说明。
+// 纪律：--repo 只改「目标解析根」，不改产物根——产物仍落主仓 reviews/<dispatchId>/；
+// 外仓只读（执行链不在外仓 commit）。
+if (repoOverride) {
+  const relToTitan = relativePath(normalizePath(TITAN_ROOT), repoOverride);
   const scope = (relToTitan === '' || (!isAbsolutePath(relToTitan) && relToTitan !== '..' && !relToTitan.startsWith('..' + pathSep)))
     ? '工作区内'
     : '工作区外（外部仓，P11 目标场景）';
-  console.log('[R7] --repo 解析位已登记（拆分期只登记不实现）：' + abs + '（' + scope + '）');
-  return abs;
-})();
+  console.log('[R7] --repo 生效：' + repoOverride + '（' + scope + '；有效根=' + effectiveRoot + '）');
+}
 
 // ---------- Step 4: --scan 8 方并行扫描（实现于 scan-flow.mjs）----------
 // T-40：scan 处理块下移至文件末尾 main().catch 之前（需复用 CDP/runTab/navigateToFreshChat
@@ -424,6 +440,8 @@ import { CDP } from './cdp-client.mjs';
 import { setDispatchMarkers, withDispatchSuffix } from './lib/markers.mjs';
 import { readRawResponse } from './lib/verdict-parse.mjs';
 import { runScanEntry } from './lib/scan-entry.mjs';
+import { validateRepoRoot, expandScanTarget, assertWithinRoot } from './lib/repo-scope.mjs';
+import { validateStage, validateProject, deriveProjectFromRepo } from './lib/lineage.mjs';
 
 
 
@@ -901,7 +919,7 @@ async function main() {
 // ---------- Step 4: --scan 8 方并行扫描（T-61 P8：块体已搬至 lib/scan-entry.mjs（runScanEntry），
 // 入口仅留调用位；T-40 历史：下移至此以复用 CDP/runTab 接入网页 4 席 + --auto-fix 链） ----------
 if (mode === 'scan') {
-  await runScanEntry({ scanFile, args, getFlagValue, getIntFlag });
+  await runScanEntry({ scanFile, args, getFlagValue, getIntFlag, scanRoot: effectiveRoot });
 }
 
 // DELTA-015: 未处理拒绝全局兜底——深层/游离 Promise 不再默认杀进程，仅告警留证

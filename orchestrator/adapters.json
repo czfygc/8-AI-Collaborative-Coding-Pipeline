@@ -10,7 +10,7 @@
       "endpoint": "http://127.0.0.1:3001/v1/chat/completions",
       "auth": "env FREELLMAPI_API_KEY（密钥不进 URL 与命令行）",
       "probe3_result": "PASS(解析级)：HTTP 200，extractVerdictLines 行数=2>0，ISSUE-ID 可解析 5 条",
-      "model_policy": "全位置 pin 审计（Director 2026-10-02）：reviewer / 修理工 / 守门人 / 诊断 一律显式传 -m 加具体模型id，禁止 auto、禁止依赖客户端配置缺省（auto 实测会路由到 codestral-latest）。强档 pin：gemini席=gemini-3.7-flash、deepseek席=deepseek-v4-pro、第4席=claude-sonnet-5、Cline修复=claude-sonnet-5、OpenCode修复与诊断=deepseek-v4-pro、守门人=gemini-3.7-flash（必须与当单修理工不同模型）。降档备援见各席 note"
+      "model_policy": "全位置 pin 审计（Director 2026-10-02）：reviewer / 修理工 / 守门人 / 诊断 一律显式传 -m 加具体模型id，禁止 auto、禁止依赖客户端配置缺省（auto 实测会路由到 codestral-latest）。强档 pin：gemini席=glm-4.7-flash、deepseek席=minimax-m3.1-flash:free、第4席=claude-sonnet-4-6-free、Cline修复=claude-sonnet-4-6-free、OpenCode修复与诊断=minimax-m3.1-flash:free、守门人=glm-4.7-flash（必须与当单修理工不同模型）。降档备援见各席 note"
     },
     "output_contract": {
       "verdict_separators_accepted": ["|", "\t"],
@@ -47,14 +47,14 @@
     {
       "name": "gemini",
       "role": "reviewer",
-      "api": { "available": true, "model": "gemini-3.7-flash", "fallback_model": "gemini-3.5-flash", "verified": true, "note": "pin 审计升级（Director 指令：用强档）：gemini-3.7-flash 实测 200+判定表3行合规；降级档 gemini-3.5-flash(200/3行) 作为备份；gemini-2.5-flash 404 已作废" },
+      "api": { "availability": "DEGRADED", "model": "gemini-3.8-flash", "fallback_model": "inclusionai/ling-3.1-flash", "verified": true, "note": "pin 审计升级（Director 指令：用强档）：gemini-3.7-flash 实测 200+判定表3行合规；降级档 gemini-3.5-flash(200/3行) 作为备份；gemini-2.5-flash 404 已作废" },
       "cdp": { "available": true, "best_effort": false },
       "validator_watch": { "unique_findings_last_round": 0, "rule": "连续2轮0独有→降级验证者席（不计≥2家独立下限），连续3轮→换模型（裁决3）" }
     },
     {
       "name": "deepseek",
       "role": "reviewer",
-      "api": { "availability": "DEGRADED", "model": "deepseek-v4-pro", "served_by_current": "codestral", "fallback_model": "deepseek-v4-flash", "verified": true, "degraded_note": "裁决2：v4-pro 上游 503（网关缺不同组织 key），⑦ 首批由 codestral 顶班=在场但降级；门禁不放宽；Director 补 key 后立即复算替换，顶班 4 条独有全配置级→长期顶班视为降级", "note": "pin 审计升级强档：deepseek-v4-pro 实测 200 served=deepseek-v4-pro-0813 判定表4行合规；降级档 deepseek-v4-flash(200/2行)；deepseek-chat 503 作废" },
+      "api": { "availability": "AVAILABLE", "model": "DeepSeek-V4-Flash", "served_by_current": "DeepSeek-V4-Flash", "fallback_model": "poolside/laguna-s-2.1:free", "verified": true, "degraded_note": "裁决2：v4-pro 上游 503（网关缺不同组织 key），⑦ 首批由 codestral 顶班=在场但降级；门禁不放宽；Director 补 key 后立即复算替换，顶班 4 条独有全配置级→长期顶班视为降级", "note": "pin 审计升级强档：deepseek-v4-pro 实测 200 served=deepseek-v4-pro-0813 判定表4行合规；降级档 deepseek-v4-flash(200/2行)；deepseek-chat 503 作废 ｜ T-169(2026-10-21) free-only 整顿：付费档已按铁律#1 禁用（直连 404），pin 改指免费档并实测 200" },
       "cdp": { "available": true, "best_effort": false }
     },
     {
@@ -67,7 +67,7 @@
     {
       "name": "reviewer4",
       "role": "reviewer",
-      "api": { "available": true, "model": "claude-sonnet-5", "fallback_model": "mistral-code", "verified": true, "note": "G15(a) 第4席，pin 审计升强档：claude-sonnet-5 实测 200+判定表4行合规。落选记录：claude-opus-4-5 404 不在目录、mistral-large-3 404 disabled、gpt-6-luna/qwen3.8-27b 429 冷却20h、kimi-k3/minimax-m3 503 无 key、mercury-2.5 200 但 0 行不合规。降级档 mistral-code(200/2行)" },
+      "api": { "available": true, "model": "claude-sonnet-4-6-free", "fallback_model": "mistral-code", "verified": true, "note": "G15(a) 第4席，pin 审计升强档：claude-sonnet-5 实测 200+判定表4行合规。落选记录：claude-opus-4-5 404 不在目录、mistral-large-3 404 disabled、gpt-6-luna/qwen3.8-27b 429 冷却20h、kimi-k3/minimax-m3 503 无 key、mercury-2.5 200 但 0 行不合规。降级档 mistral-code(200/2行) ｜ T-169(2026-10-21) free-only 整顿：付费档已按铁律#1 禁用（直连 404），pin 改指免费档并实测 200" },
       "cdp": { "available": false, "reason": "无对应网页审阅席位" }
     },
     {
@@ -82,7 +82,7 @@
     "opencode": {
       "role": "debugger",
       "headless_entry": "opencode run [--format json] -m <provider>/<model>",
-      "pin": { "primary": "freellmapi/deepseek-v4-pro", "fallback": "freellmapi/claude-sonnet-5", "note": "调用必须显式 -m；主挂(fail/超时/额度)自动降 fallback，双挂才 unavailable（红线：不因单模型挂停批）" },
+      "pin": { "primary": "freellmapi/minimax/minimax-m3.1-flash:free", "fallback": "freellmapi/claude-sonnet-4-6-free", "note": "调用必须显式 -m；主挂(fail/超时/额度)自动降 fallback，双挂才 unavailable（红线：不因单模型挂停批）" },
       "probe1_verdict": "USABLE_WITH_CONDITIONS",
       "probe4_verdict": "VERIFIED（第3轮首跑）：--format json NDJSON 7/7 可解析，结论 {\"branch\": \"REJECTED_DEFINITION\", \"evidence\": \"src/app.js:2\", \"reason\": \"delta 与代码不符\"}，只读未改动（repo4 git status 干净）",
       "conditions": [
@@ -90,13 +90,13 @@
         "prompt 必须显式禁止 git push（沙箱无 remote 时它会 push 失败后不退出）",
         "外层必须 timeout 包装 + 进程清理（run 完成后 opencode.exe 常驻不退出）",
         "FREELLMAPI_API_KEY 必须注入进程环境（配置里是 {env:...}）",
-        "pin 审计（Director 2026-10-02）：调用必须显式 -m freellmapi/deepseek-v4-pro（禁 auto；全局 opencode.json 的 model=freellmapi/auto 只是缺省，禁止依赖）"
+        "pin 审计（Director 2026-10-02）：调用必须显式 -m freellmapi/minimax/minimax-m3.1-flash:free（禁 auto；全局 opencode.json 的 model=freellmapi/auto 只是缺省，禁止依赖）"
       ]
     },
     "cline": {
       "role": "gatekeeper",
       "headless_entry": "cline \"<prompt>\" --json --auto-approve <bool> -P openai -c <cwd> --data-dir <dir> -t <sec>",
-      "pin": { "fixer_primary": "claude-sonnet-5", "fixer_fallback": "gemini-3.7-flash", "gate_primary": "gemini-3.7-flash", "gate_fallback": "mistral-code", "note": "每条命令行显式 -m；同单守门人模型必须不同于修理工模型（G11 两级独立性）；主挂自动降 fallback" },
+      "pin": { "fixer_primary": "claude-sonnet-4-6-free", "fixer_fallback": "poolside/laguna-s-2.1:free", "gate_primary": "glm-4.7-flash", "gate_fallback": "mistral-code", "note": "每条命令行显式 -m；同单守门人模型必须不同于修理工模型（G11 两级独立性）；主挂自动降 fallback" },
       "probe2_verdict": "PASS",
       "probe5_verdict": "PASS(read-only)，auto-approve=false 时连只读操作也会停下来请示 → 守门人运行用 auto-approve=true + 指令约束 + 事后 diff 指纹校验",
       "conditions": [

@@ -1,4 +1,4 @@
-# 使用说明——不写代码，让 8 个 AI 帮你把项目做出来
+# 使用说明——多 AI 协作流水线：不写代码，让多个 AI 帮你把项目做出来
 
 > 本文写给**不懂代码**的人。你不需要会编程，但需要能照着做下面这几步（全程约 30 分钟准备）。
 
@@ -6,10 +6,12 @@
 
 ## 1. 这是什么
 
-这是一个 **8 个 AI 协作的流水线**：
+这是一个 **多 AI 协作的流水线**：
 
-- 4 个**网页 AI 评审专家**（Gemini、DeepSeek、Qwen，外加 ChatGPT 做最终裁决）——负责出方案、拆解任务、审查结果
-- 4 个**本地编码客户端**（deepseek Harness、OpenCode、Cline、Kilo Code）——负责真正写出代码
+- 若干**网页 AI 评审专家**（Gemini、DeepSeek、Qwen，外加 ChatGPT 做最终裁决）——负责出方案、拆解任务、审查结果
+- 若干**本地编码客户端**（deepseek Harness、OpenCode、Cline、Kilo Code）——负责真正写出代码
+
+> 席位数按需编排：网页席负责评审、本地席负责实现，另有热备席吸收网页 AI 的波动。**具体席位数是部署选择，不是固定承诺。**
 
 你只需要**用大白话描述你想做什么**，流水线负责拆解、设计、写代码、复核。
 
@@ -20,7 +22,7 @@
 - ✅ 你**不需要会写代码**
 - ✅ 你不需要自己写文档、画架构图
 - ⚠️ 但你需要会做 4 件小事：①双击安装一个软件 ②下载源码包解压 ③在终端敲两行命令 ④打开一个 AI 客户端用中文说话
-- ⚠️ 4 个网页 AI 需要你**自己注册免费账号**（各约 1 分钟）
+- ⚠️ 网页 AI 需要你**自己注册免费账号**（各约 1 分钟）
 - ⚠️ 目前主要在 **Windows** 上运行
 
 ## 3. 一次性准备（约 30 分钟）
@@ -32,7 +34,7 @@
 
 ### 第 2 步：下载本项目源码
 
-1. 打开仓库首页 <https://github.com/czfygc/8-AI-Collaborative-Coding-Pipeline>
+1. 打开仓库首页 <https://github.com/czfygc/multi-ai-collaboration-pipeline>
 2. 点 **Code** 按钮 → **Download ZIP**
 3. 解压到你喜欢的位置，例如 `D:\myproject`
 
@@ -54,7 +56,7 @@ npm install
 1. 双击 `orchestrator\启动 CDP 浏览器.bat`
 2. 会打开一个 Chrome 窗口（请保持它开着，别关）
 
-### 第 5 步：登录 4 个网页 AI
+### 第 5 步：登录网页 AI
 
 在这个 Chrome 窗口里，分别打开并登录（没有账号就各注册一个）：
 
@@ -74,9 +76,9 @@ npm install
 1. 打开任一本地 AI 客户端（OpenCode、Cline、Kilo Code 三选一）——它相当于你的"助手"
 2. 用大白话告诉它：
 
-> 帮我用这个流水线做一个宠物领养小程序：用户能浏览待领养的宠物、提交领养申请，管理员能审核通过或拒绝。请先拆解任务、设计好再写代码，最后做八方复核。
+> 帮我用这个流水线做一个宠物领养小程序：用户能浏览待领养的宠物、提交领养申请，管理员能审核通过或拒绝。请先拆解任务、设计好再写代码，最后做全票复核。
 
-3. 剩下交给流水线：网页 AI 出方案 → 拆解任务 → 本地客户端写代码 → 8 方复核全票通过后合并。
+3. 剩下交给流水线：网页 AI 出方案 → 拆解任务 → 本地客户端写代码 → 全票复核通过后合并。
 
 > 提示：需求描述越具体，结果越好。可以加上"用什么技术栈（比如网页版）"、"要不要登录功能"、"界面风格"等。
 
@@ -101,7 +103,7 @@ npm install
 - **Alpha 版**：复杂需求可能需要多轮沟通和微调，不是一句话就能完美交付
 - **网页 AI 会变**：这些网站经常改版、掉线、限流，流水线会尽量自动恢复，但偶尔需要你手动刷新登录
 - **你需要基础操作能力**：能装软件、解压、开终端、注册账号——这些都能在 10 分钟学会
-- **代码质量**：会经过 8 方复核，但 Alpha 阶段仍建议你自己或找懂行的人过目后再上线使用
+- **代码质量**：会经过全票复核，但 Alpha 阶段仍建议你自己或找懂行的人过目后再上线使用
 
 ## 8. 进阶（可选）：用手机上的 Telegram 发指令
 
@@ -123,6 +125,40 @@ npm install
 - 前缀必须是 `!titan `（感叹号 + 空格），否则机器人只回复用法提示
 - 发消息别太频繁（建议 10 条/分钟以内），否则 Telegram 会限流甚至封机器人
 - 停止：结束那个 `python` 进程即可；重新启动会自动跳过停机期间积压的旧消息
+
+## 9. 验收你拿到的东西（产物级闸门）
+
+下载了发布压缩包、或者想知道某个目录"到底做完没有"，跑闸门即可。闸门很诚实：**通过 / 失败 / 未知**三态分明——**"未知"永远不算通过**。
+
+```powershell
+# 1. 产物清单（文件 + 大小 + SHA256）与一致性校验
+node orchestrator/artifact-gate.mjs manifest       --root <目录> --out manifest.json
+node orchestrator/artifact-gate.mjs verify-manifest --root <目录> --manifest manifest.json
+
+# 2. 第三方署名（LICENSE + NOTICE 必须在，且覆盖每个运行时依赖）
+node orchestrator/artifact-gate.mjs license         --root <目录>
+
+# 3. 发布附件的匿名可下载性（地址 + 期望字节数 + SHA-256）
+node orchestrator/artifact-gate.mjs anon-download   --page <发布页> --download <附件地址> --sha256 <hex> --bytes <n>
+
+# 4. 总判：代码 / 产物 / 发布三段独立判定
+node orchestrator/artifact-gate.mjs stage-gate      --root <目录> --manifest manifest.json --code PASS
+```
+
+退出码：`0 = PASS`、`1 = FAIL`、`3 = UNKNOWN`、`2 = 用法错误`。
+
+另外两个实用工具：
+
+```powershell
+# 此刻哪些模型真能用，以及哪类任务该派给哪一档（低档优先，稀缺额度留给强档）
+node orchestrator/model-health.mjs --task mechanical
+node orchestrator/model-health.mjs --all --no-probe --json   # 离线视图，不烧额度
+
+# 长任务别再"关掉终端就没了"：装成计划任务常驻（Windows）
+node orchestrator/supervisor.mjs add my-job -- node my-job.mjs
+node orchestrator/supervisor.mjs install
+node orchestrator/supervisor.mjs status
+```
 
 ---
 

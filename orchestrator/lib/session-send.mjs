@@ -616,11 +616,47 @@ async function runTabBase(cdp, page, reviewer, promptText, rawDir, shotDir, opti
      // 4 页均有"刷新"选项）。gate 判定回复不可用 → 悬停后点 regenerate → 等旧文本变化 → 等稳定；
      // 找不到刷新按钮则同页重发 prompt 兜底。最多 maxRegen 次；任何失败保留原回复，不阻塞主链。
      if (qualityGateCallback) {
-       log.regen = [];
-       for (let gi = 0; gi < maxRegen; gi++) {
-         const curText = (finalSnap && finalSnap.lastText) || '';
-         if (!qualityGateCallback(curText)) break;
-         console.warn('[WARN] ' + reviewer.name + ' 回复过弱（无有效 findings），点刷新重生成 (' + (gi + 1) + ')');
+        log.regen = [];
+        for (let gi = 0; gi < maxRegen; gi++) {
+          const curText = (finalSnap && finalSnap.lastText) || '';
+          if (!qualityGateCallback(curText)) break;
+          // T-71 复现修复（2026-10-21 实测 scan-mvh8vnmh → scan-mvha0zta 两轮）：
+          // 弱回复的根因不是「模型没给 findings」，而是「页面根本没渲染完」——
+          // deepseek 首轮 waitForResponse 超时 → T-62 兜底只抓到 61 字符空壳；
+          // gemini 合法回 `[]`（= 无问题）也是短文本。短文本一律不判弱：
+          // 既避免同页重发产生重复气泡，也避免把合法短回复当故障重试。
+          // 判据不依赖 generating 标志（停止按钮文案检测在 deepseek/grok 上不可靠，
+          // 实测 generating=false 但正文仍在生成）。
+          if ((curText || '').trim().length < 200) {
+            console.warn('[WARN] ' + reviewer.name + ' 捕获文本过短（' + (curText || '').trim().length + ' 字符，判定页面未渲染完/合法空回复），跳过 regen/重发');
+            log.regen.push({ skipped: 'short-text', len: (curText || '').trim().length });
+            break;
+          }
+          // T-71 复现修复（2026-10-21 实测 scan-mvh8vnmh/deepseek）：首轮 waitForResponse
+          // 超时 → T-62 兜底只抓到 61 字符（页面仍在生成、正文未渲染完）→ 弱闸误判 →
+          // 找不到刷新按钮 → 同页重发 prompt → 同一页两条用户气泡 = 重复气泡。
+          // 生成态门：判弱后重抓快照，若页面仍在生成（generating）或文本仍在增长，
+          // 则不 regen（不重发），改为继续等回复到稳。
+          let genSnap = null;
+          try {
+            const gR = await cdp.send('Runtime.evaluate', { expression: buildSnapshotScript(reviewer && reviewer.response_selector), returnByValue: true }, sessionId);
+            genSnap = gR.result && gR.result.value;
+          } catch { /* 快照失败按原逻辑继续 */ }
+          const curLen = (curText || '').length;
+          const newLen = (genSnap && (genSnap.lastTextLen || 0)) || 0;
+          if (genSnap && (genSnap.generating || newLen > curLen)) {
+            console.warn('[WARN] ' + reviewer.name + ' 页面仍在生成（generating=' + !!genSnap.generating + '，文本 ' + curLen + '→' + newLen + ' 字符），跳过 regen/重发，改为继续等回复');
+            log.regen.push({ skipped: 'generating-state', generating: !!genSnap.generating, textLenFrom: curLen, textLenTo: newLen });
+            try {
+              const waitMs = Math.min(reviewer.response_max_ms || 120000, 180000);
+              finalSnap = await waitForResponse(cdp, sessionId, { maxMs: waitMs, stableMs: 5000, extraSelectors: reviewer && reviewer.response_selector });
+              log.phase.push('regen-responded');
+            } catch (e) {
+              log.regen.push({ ok: false, reason: 'generating-wait-timeout', error: e.message });
+            }
+            break;
+          }
+          console.warn('[WARN] ' + reviewer.name + ' 回复过弱（无有效 findings），点刷新重生成 (' + (gi + 1) + ')');
          // 先悬停最后一条回复：chatgpt 等站点消息工具栏 hover 才渲染
          try {
            const posR = await cdp.send('Runtime.evaluate', {
@@ -647,10 +683,31 @@ async function runTabBase(cdp, page, reviewer, promptText, rawDir, shotDir, opti
            clickVal = { ok: false, error: e.message };
          }
          log.regen.push(clickVal || { ok: false });
-         if (!clickVal || !clickVal.ok) {
-           // 刷新按钮按会话状态条件渲染 → 确定性兜底：同页重发一次 prompt
-           //（复用注入+提交+升级确认，走已验证的发送路径）
-           console.warn('[WARN] ' + reviewer.name + ' 未找到刷新按钮，同页重发 prompt 兜底');
+          if (!clickVal || !clickVal.ok) {
+            // 刷新按钮按会话状态条件渲染 → 确定性兜底：同页重发一次 prompt
+            //（复用注入+提交+升级确认，走已验证的发送路径）
+            // T-71 复现修复（2026-10-21）：同页重发 = 同页第二条用户气泡 = 重复气泡根源。
+            // 重发前必须再判一次生成态：页面仍在生成（首轮 response-timeout 兜底抓到
+            // 61 字符空壳时的典型状态）→ 不重发，改为继续等回复到稳。
+            let stillGenerating = false;
+            try {
+              const g2 = await cdp.send('Runtime.evaluate', { expression: buildSnapshotScript(reviewer && reviewer.response_selector), returnByValue: true }, sessionId);
+              const g2v = g2.result && g2.result.value;
+              stillGenerating = !!(g2v && g2v.generating);
+            } catch { /* 探测失败按不生成处理 */ }
+            if (stillGenerating) {
+              console.warn('[WARN] ' + reviewer.name + ' 页面仍在生成，跳过同页重发（防重复气泡）');
+              log.regen.push({ skipped: 'resend-blocked-generating' });
+              try {
+                const waitMs2 = Math.min(reviewer.response_max_ms || 120000, 180000);
+                finalSnap = await waitForResponse(cdp, sessionId, { maxMs: waitMs2, stableMs: 5000, extraSelectors: reviewer && reviewer.response_selector });
+                log.phase.push('regen-responded');
+              } catch (e) {
+                log.regen.push({ ok: false, reason: 'generating-wait-timeout', error: e.message });
+              }
+              break;
+            }
+            console.warn('[WARN] ' + reviewer.name + ' 未找到刷新按钮，同页重发 prompt 兜底');
            try {
              const injR = await cdp.send('Runtime.evaluate', { expression: buildInjectScript(promptText), returnByValue: true }, sessionId);
              await new Promise(r => setTimeout(r, 800));
@@ -795,7 +852,7 @@ export async function runTabUpload(cdp, page, reviewer, artifactAbsPath, promptT
           btn.click();
           return { clicked: true, residualLen: len };
         })()`;
-       const sendDeadline = Date.now() + 30000;
+        const sendDeadline = Date.now() + 15000;
        let sentOk = false;
        let rescueTries = 0;
        let lastRescueAt = 0;
@@ -819,8 +876,8 @@ export async function runTabUpload(cdp, page, reviewer, artifactAbsPath, promptT
          } catch { /* 页面跳转中，evaluate 可能短暂失败，重试 */ }
          await new Promise(r => setTimeout(r, 1000));
        }
-       log.sent = { ok: sentOk };
-       if (!sentOk) console.warn('[WARN] ' + reviewer.name + ' 提交后 30s 内未确认消息发出（可能仍在排队）');
+        log.sent = { ok: sentOk };
+        if (!sentOk) console.warn('[WARN] ' + reviewer.name + ' 提交后 15s 内未确认消息发出（可能仍在排队）');
      },
      qualityGateCallback: (curText) => {
        return opts && typeof opts.regenGate === 'function' ? opts.regenGate(curText) : false;

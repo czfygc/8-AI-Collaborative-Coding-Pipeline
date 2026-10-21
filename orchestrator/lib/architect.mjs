@@ -57,9 +57,13 @@ export function parseArchitectYaml(path) {
 // ---------- 架构师裁决：--architect <dispatchId> 注入 delta.md 到 ChatGPT ----------
 // 会话隔离：prompt 头部声明全新会话 + 只要求逐条 accept/reject/defer，不评论方案本身。
 export async function runArchitect(dispatchId) {
-  // P1-08: 消费侧校验 dispatchId 格式（8 位 hex）；path.normalize 后限定根目录
-  if (!/^[0-9a-f]{8}$/.test(dispatchId)) {
-    console.error('[ARCHITECT] dispatchId 格式错误：非 8 位 hex: ' + dispatchId);
+  // P1-08：消费侧校验 dispatchId 格式（8 位 hex）；path.normalize 后限定根目录
+  // T-71/T-72（2026-10-21）：放行 scan-<base36> 形式 —— scan 模式产出 layer-b/delta.md
+  // 后需直接送 ChatGPT 逐条裁决，但原正则只认 8 位 hex，导致「去重汇总 → ChatGPT 审核」
+  // 链路在 scan 路径上完全走不通（--analyze 亦只吃 layer-a canonical，scan 无 layer-a）。
+  // 路径穿越防护不变：下方 normalizePath + startsWith(TITAN_ROOT + pathSep) 仍把关。
+  if (!/^[0-9a-f]{8}$/.test(dispatchId) && !/^scan-[0-9a-z]+$/.test(dispatchId)) {
+    console.error('[ARCHITECT] dispatchId 格式错误：非 8 位 hex 或 scan-<id>: ' + dispatchId);
     process.exit(1);
   }
   const outDir = join(TITAN_ROOT, 'reviews', dispatchId);
@@ -87,7 +91,12 @@ export async function runArchitect(dispatchId) {
   const deltaBody = delta.length > MAX_DELTA_CHARS
     ? delta.slice(0, MAX_DELTA_CHARS) + '\n\n[DELTA TRUNCATED ' + (delta.length - MAX_DELTA_CHARS) + ' chars — 后续条目未送架构师]\n'
     : delta;
-  const architectPrompt = '这是一个全新会话。忽略任何历史上下文。\n只针对以下 DELTA 逐条回复：accept / reject / defer + 一句理由。\n不要评论方案本身。不要给改进建议。\n====\n' + deltaBody;
+  const architectPrompt = '这是一个全新会话。忽略任何历史上下文。\n只针对以下 DELTA 逐条回复：accept / reject / defer + 一句理由。\n不要评论方案本身。不要给改进建议。\n====\n' + deltaBody
+    // T-71/T-72（2026-10-21 实测 scan-mvha0zta）：ChatGPT 新 UI 会把用户气泡以
+    // "You said:" 引用块形式渲染在 assistant 消息内部 → innerText = prompt 回显 + 回答。
+    // prompt 末尾插 marker，捕获侧（snapExpr 已用 markerEnd 剥离）即可切掉回显，
+    // 令 architect-decision.md 只落真实裁决，formatOk 判定也落在回答区而非回显区。
+    + '\n' + markerEnd(dispatchId);
   mkdirSync(layerBDir, { recursive: true });
   // 架构师配置读 reviewers.yaml 的 architect 段（I006），缺失时回落内联默认
   const archCfg = { ...parseArchitectYaml(REVIEWERS_YAML) };
@@ -136,7 +145,7 @@ export async function runArchitect(dispatchId) {
     }
     // P1-02: 捕获限定 assistant 消息 —— 去掉 .markdown/article/[class*="response"] 等会命中
     // 用户气泡与侧边栏的选择器；只取助手消息，且排除注入的 prompt 回显（含 PROMPT_MARKER）
-    const snapExpr = '(() => { const MARKER=' + JSON.stringify(markerEnd()) + '; const sel=' + JSON.stringify([archCfg.response_selector, '[data-message-author-role="assistant"]', 'model-response', '[class*="agent"]'].filter(Boolean)) + '; let last=\'\'; for(const s of sel){const ns=[...document.querySelectorAll(s)];if(ns.length){const t=(ns[ns.length-1].innerText||\'\').trim();if(t.length>last.length)last=t;}} if(last.includes(MARKER)){const mi=last.lastIndexOf(MARKER);last=last.slice(mi+MARKER.length).trim();} const stop=[...document.querySelectorAll(\'button\')].filter(b=>((b.innerText||\'\')+\' \'+(b.getAttribute(\'aria-label\')||\'\')).toLowerCase().match(/stop|停止|cancel/)); return {len:last.length,last,generating:stop.length>0}; })()';
+    const snapExpr = '(() => { const MARKER=' + JSON.stringify(markerEnd(dispatchId)) + '; const sel=' + JSON.stringify([archCfg.response_selector, '[data-message-author-role="assistant"]', 'model-response', '[class*="agent"]'].filter(Boolean)) + '; let last=\'\'; for(const s of sel){const ns=[...document.querySelectorAll(s)];if(ns.length){const t=(ns[ns.length-1].innerText||\'\').trim();if(t.length>last.length)last=t;}} if(last.includes(MARKER)){const mi=last.lastIndexOf(MARKER);last=last.slice(mi+MARKER.length).trim();} const stop=[...document.querySelectorAll(\'button\')].filter(b=>((b.innerText||\'\')+\' \'+(b.getAttribute(\'aria-label\')||\'\')).toLowerCase().match(/stop|停止|cancel/)); return {len:last.length,last,generating:stop.length>0}; })()';
     let last = ''; let lastLen = -1; let stable = 0; const t0 = Date.now();
     while (Date.now() - t0 < ARCHITECT_CAPTURE_WINDOW_MS) {
       const r = await cdp.send('Runtime.evaluate', { expression: snapExpr, returnByValue: true }, sid);
@@ -152,6 +161,30 @@ export async function runArchitect(dispatchId) {
     // 仅当 assistant 捕获完全失败时才告警，不再用 body 尾部填充。
     // P1-02 余项（2026-09-30）: 下限 50→10。50 会误杀合法短裁决（实测 32 字符的
     // "无 DELTA 项：defer…" 被判空并覆盖成占位）；10 仍可挡住 spinner/占位碎片。
+    // T-71/T-72（2026-10-21 实测 scan-mvha0zta / scan-mvhavowt）：ChatGPT 新 UI 把用户
+    // 气泡以 "You said:" 引用块渲染在 assistant 消息内部 → innerText = prompt 回显 + 回答。
+    // 剥离：① marker 命中（prompt 尾部插的 markerEnd）→ 取其后；② marker 未命中
+    // （ChatGPT 对超长 prompt 会折叠 "Show more"，DOM 里可能没有完整 marker）→
+    // 兜底取「最后一个 DELTA id 所在行行首之后」——回显在前、回答在后且必含 DELTA id。
+    const MARKER_TEXT = markerEnd(dispatchId);
+    let bodyText = last;
+    if (bodyText.includes(MARKER_TEXT)) {
+      const mi = bodyText.lastIndexOf(MARKER_TEXT);
+      bodyText = bodyText.slice(mi + MARKER_TEXT.length).trim();
+    } else {
+      const idsForStrip = (delta.match(/DELTA-\d{3}/g) || []);
+      let lastIdAt = -1;
+      for (const id of idsForStrip) {
+        const p = bodyText.lastIndexOf(id);
+        if (p > lastIdAt) lastIdAt = p;
+      }
+      if (lastIdAt > 0) {
+        const lineStart = bodyText.lastIndexOf('\n', lastIdAt) + 1;
+        const cand = bodyText.slice(lineStart).trim();
+        if (cand.length >= 20) bodyText = cand;
+      }
+    }
+    last = bodyText;
     if (!last || last.length < 10) {
       console.warn('[ARCHITECT] ARCHITECT_CAPTURE_EMPTY: assistant 消息捕获为空或过短（len=' + (last ? last.length : 0) + ', bodyLen=' + body.length + '），不写侧边栏文本');
       last = '_（捕获失败：未找到 assistant 消息，本文件为占位）_';
@@ -166,7 +199,10 @@ export async function runArchitect(dispatchId) {
     const deltaIds = (delta.match(/DELTA-\d{3}/g) || []);
     const missing = [];
     for (const did of deltaIds) {
-      const at = last.indexOf(did);
+      // T-71/T-72（2026-10-21 实测 scan-mvhavowt）：prompt 回显里也含 DELTA id，
+      // 用 indexOf 会把判定窗口落在回显区（无判定词 → 全条误报 missing）。
+      // 回答区在末尾（回显在前），故用 lastIndexOf 定位回答区中的 id。
+      const at = last.lastIndexOf(did);
       if (at < 0) { missing.push(did + ' (id 未出现在裁决中)'); continue; }
       // P2-13: 窗口按下一个 DELTA id 边界裁切，而不是固定 600 字符
       let windowEnd = last.length;
@@ -176,7 +212,11 @@ export async function runArchitect(dispatchId) {
       }
       const after = last.slice(at, Math.min(at + 600, windowEnd));
       // 判定词必须与 id 同段（行首或紧随），排除 "accept risk" 类模板文本
-      const decisionMatch = after.match(/(?:^|\n)\s*(?:[-*]?\s*)?(accept|reject|defer)\b/i);
+      // T-71/T-72（2026-10-21 实测 scan-mvha0zta）：ChatGPT 实际逐条给了裁决，
+      // 但格式是同行 `DELTA-001: accept — 理由`，判定词不在行首 → 原正则
+      // (?:^|\n) 锚定判全条 missing（16/16 误报）。放宽为「行首 / 冒号后 / 列表项前」，
+      // 同时仍排除 "accept risk" 类模板文本（判定词前不得有字母）。
+      const decisionMatch = after.match(/(?:^|\n|:\s|\*|-)\s*(?<!risk\s)(accept|reject|defer)\b/i);
       if (!decisionMatch) missing.push(did + ' (其后窗口内无独立 accept/reject/defer)');
     }
     const formatOk = deltaIds.length > 0 && missing.length === 0;

@@ -72,6 +72,22 @@ export const PIPELINE_STAGE_SCHEMAS = Object.freeze({
   'deliver-v1': Object.freeze({ stage: 'deliver', fields: PIPELINE_STAGE_FIELDS }),
 });
 
+// 5) verify 命令注册槽（T-164 落地，R4）：权威源 = orchestrator/config/verify-profiles.json
+//    （纯数据；读侧 orchestrator/lib/verify-profiles.mjs 解析 + 执行）。UNKNOWN 传播语义：
+//    profile/capability 缺失 → 显式 UNKNOWN，不静默当通过。消费方 titan-execute.mjs 的
+//    language 槽（T-163）与 CLI orchestrator/verify-profile.mjs。
+export const VERIFY_PROFILES_CONTRACT = Object.freeze({
+  id: 'verify-profiles',
+  authoritativeSource: 'orchestrator/config/verify-profiles.json',
+  required: ['version', 'languages', 'profiles', 'capabilities', 'unknownPolicy'],
+  languageKeys: ['js', 'py'],
+  capabilityEnum: ['syntax', 'test'],
+  profileEnum: ['node:mjs', 'python:pkg'],
+  statusEnum: ['PASS', 'FAIL', 'UNKNOWN'],
+  note: 'UNKNOWN ≠ FAIL：显式未知不阻断（由调用方决定），但绝不静默当通过；命令按 argv 逐个执行（不走 shell）',
+  consumer: 'titan-execute.mjs verify() 第 4 步 + orchestrator/verify-profile.mjs CLI',
+});
+
 // 总注册表（id → 契约；消费方按 id 取用）
 export const CONTRACTS = Object.freeze({
   'execute-result': EXECUTE_RESULT_CONTRACT,
@@ -80,4 +96,5 @@ export const CONTRACTS = Object.freeze({
   'design-v1': PIPELINE_STAGE_SCHEMAS['design-v1'],
   'plan-v1': PIPELINE_STAGE_SCHEMAS['plan-v1'],
   'deliver-v1': PIPELINE_STAGE_SCHEMAS['deliver-v1'],
+  'verify-profiles': VERIFY_PROFILES_CONTRACT,
 });

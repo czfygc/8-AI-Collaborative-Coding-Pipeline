@@ -1,4 +1,4 @@
-# TITAN Archaeology — Security Policy
+# Multi-AI Collaboration Pipeline — Security Policy
 
 ## Vulnerability Reporting
 

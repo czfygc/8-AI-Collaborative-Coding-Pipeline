@@ -10,6 +10,7 @@ import { extractAlreadyResolvedProof, proofLineMatches } from './lib/already-res
 import { checkFileSanity } from './lib/file-sanity.mjs';
 import { runPairedTest, runSemanticGuard } from './lib/semantic-guard.mjs';
 import { runProcess } from './lib/proc-tree.mjs';
+import { runCapability, detectLanguage, VERIFY_STATUS } from './lib/verify-profiles.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // P-27 修复（R3-002，kilo 席发现）：执行器修复轮曾在 ESM 里写 require('./config')/
@@ -56,11 +57,16 @@ const allowFiles = argv.includes('--files')
   : null;
 // R3 预留接口层（T-61 C-11 注册，计划 §4 R3）：任务类型槽——默认 'fix'（现有实装路径不变）；
 // implement|scaffold 为 V8/P12 实施链预留，命中即报"未实现"退 0（与 R1 stub 同口径，便于探活）。
-// language 槽（js|py）：拆分期仅解析存槽，不消费——"透传到 verify 选择"属拆后 P11 实装。
+// language 槽（js|py）：T-163 起**实装**——透传给 verify 选择（消费 R4 verify-profiles 槽，
+// orchestrator/config/verify-profiles.json）：按语言对改动文件做 syntax 检查。
 const taskTypeArg = argv.includes('--task-type') ? argv[argv.indexOf('--task-type') + 1] : null;
 const taskType = (taskTypeArg && !taskTypeArg.startsWith('--')) ? taskTypeArg : 'fix';
 const languageArg = argv.includes('--language') ? argv[argv.indexOf('--language') + 1] : null;
-const language = (languageArg && !languageArg.startsWith('--')) ? languageArg : 'js';
+const language = (languageArg && !languageArg.startsWith('--')) ? languageArg.toLowerCase() : 'js';
+if (!['js', 'py'].includes(language)) {
+  console.error('ERROR: --language 必须是 js 或 py（收到: ' + language + '）');
+  process.exit(2);
+}
 
 if (argv.includes('--help') || argv.includes('-h')) {
   console.log([
@@ -74,8 +80,8 @@ if (argv.includes('--help') || argv.includes('-h')) {
     '  --file <path>       强制所有 ACCEPT DELTA 指向该文件（scan 单文件模式防幻觉路径）',
     '  --files <a,b,c>     多文件白名单模式（delta.file 必须落在清单内）',
     '  --skip-baseline     跳过范围基线检查（慎用）',
-    '  --task-type <fix|implement|scaffold>  R3 预留槽：implement/scaffold 未实现退 0（默认 fix）',
-    '  --language <js|py>  R3 预留槽：语言字段仅解析存槽（verify 选择接入属 P11；默认 js）',
+    '  --task-type <fix|implement|scaffold>  R3 任务类型槽：implement/scaffold 未实现退 0（默认 fix）',
+    '  --language <js|py>      R3 语言槽（T-163 实装）：透传给 verify profile 做 syntax 检查（默认 js）',
     '  --help, -h          显示本帮助'
   ].join('\n'));
   process.exit(0);
@@ -416,6 +422,9 @@ function rollbackExecutorChanges(base, tag) {
   }
 }
 
+// T-163：最近一次 verify 的 profile 结果（syntax 检查状态），随结果条目落盘供审计。
+let lastVerifyProfile = null;
+
 // 验证函数：target 必改（scoped diff）+ 范围检查（全树 diff，排除 preDirty）+ verify-baseline（可选）
 async function verify(delta, fullDiff, scopedDiff, requireTargetChange = true) {
   // 0. 目标文件必须真的被改了（scoped diff 为空 = 执行器没动它 → 空验证假 PASS 风险；
@@ -462,6 +471,21 @@ async function verify(delta, fullDiff, scopedDiff, requireTargetChange = true) {
       console.log(vb.stdout);
       return false;
     }
+  }
+  // 4. T-163（R3 language 槽实装 + R4 verify-profiles 消费）：按语言对改动文件做 syntax 检查。
+  //    口径：FAIL → verify 失败（语法坏了就是坏了）；UNKNOWN → 显式记账但不阻断
+  //    （profile 无此能力/语言未知——不等于通过，也不等于失败）。
+  const fileLang = detectLanguage(delta.file) || language;
+  const prof = runCapability({ language: fileLang, file: join(TITAN_ROOT, delta.file), capability: 'syntax', cwd: TITAN_ROOT });
+  lastVerifyProfile = { status: prof.status, profile: prof.profile, language: fileLang, reason: prof.reason || '' };
+  if (prof.status === VERIFY_STATUS.FAIL) {
+    console.log('❌ verify-profile syntax FAIL (' + prof.profile + '): ' + (prof.output || '').slice(-500));
+    return false;
+  }
+  if (prof.status === VERIFY_STATUS.UNKNOWN) {
+    console.log('⚠ verify-profile UNKNOWN（显式未知，不阻断）: ' + prof.reason);
+  } else {
+    console.log('✅ verify-profile syntax PASS (' + prof.profile + ')');
   }
   return true;
 }
@@ -655,7 +679,7 @@ PROOF: ${delta.file}:<行号>: <该行原文片段（逐字，>=8 字符）>
           allPass = false;
           continue;
         }
-        results.push({ deltaId: delta.id, file: delta.file, status: 'PASS', exitCode: 0, reason: 'ALREADY_RESOLVED (PROOF verified)', proof: arProof.proof, finding: delta.finding, action: delta.action });
+        results.push({ deltaId: delta.id, file: delta.file, status: 'PASS', exitCode: 0, reason: 'ALREADY_RESOLVED (PROOF verified)', proof: arProof.proof, finding: delta.finding, action: delta.action, verifyProfile: lastVerifyProfile });
         console.log('⏭', delta.id, 'PASS (ALREADY_RESOLVED + PROOF verified @' + arProof.proof.file + ':' + arProof.proof.line + ')');
         console.log('  执行器判词:', stdout.slice(-300).replace(/\s+/g, ' '));
         continue;
@@ -671,7 +695,7 @@ PROOF: ${delta.file}:<行号>: <该行原文片段（逐字，>=8 字符）>
       // 留脏区）；preDirty=他人未提交工作，M7 绝不碰。
       rollbackExecutorChanges(baseCommit, 'verify-fail');
       cleanupOrphans(untrackedBefore, 'verify-fail');
-      results.push({ deltaId: delta.id, file: delta.file, status: 'FAIL', exitCode: 0, reason: 'verify failed' });
+      results.push({ deltaId: delta.id, file: delta.file, status: 'FAIL', exitCode: 0, reason: 'verify failed', verifyProfile: lastVerifyProfile });
       allPass = false;
       continue;
     }
@@ -733,7 +757,7 @@ PROOF: ${delta.file}:<行号>: <该行原文片段（逐字，>=8 字符）>
     baseCommit = newBase;
 
     // 验证通过，结果已提交
-    results.push({ deltaId: delta.id, file: delta.file, status: 'PASS', exitCode: 0, semantic: semanticStatus });
+    results.push({ deltaId: delta.id, file: delta.file, status: 'PASS', exitCode: 0, semantic: semanticStatus, verifyProfile: lastVerifyProfile });
     console.log('✅', delta.id, 'PASS');
   }
 }
