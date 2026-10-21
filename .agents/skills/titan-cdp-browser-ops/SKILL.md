@@ -18,7 +18,7 @@ provenance: original
 
 ## 1. 环境（2026-10-11 实测 + 2026-10-12 增补）
 
-- 启动：`D:\TITAN_ARCHAEOLOGY\orchestrator\启动 CDP 浏览器.bat`（playwright chromium，`--remote-debugging-port=9222`，**persistent profile `chrome-cdp-profile`——登录/验证态跨重启保留**）。
+- 启动：`<workspace>\orchestrator\启动 CDP 浏览器.bat`（playwright chromium，`--remote-debugging-port=9222`，**persistent profile `chrome-cdp-profile`——登录/验证态跨重启保留**）。
 - 断连（ECONNREFUSED 9222）= 浏览器被关。重跑 .bat 即可，标签页异步恢复（等 ~8-15s 再 list）。**勿自启**，让用户跑 .bat。
 - **动浏览器前先查代理栈**：`Test-NetConnection 127.0.0.1 -Port 10810`（浏览器走系统代理；代理挂了先拉 sing-box，否则页面只出 `chrome-error://chromewebdata/`）。
 - CF 双账号可**同一浏览器共存**：A=gcczfy（8f8f3623…，512688.xyz 与代理 Worker 所在）、B=geczfy（b093bcb2…）。账号归属用 **account-pinned URL**（`/b093…/…`）消除歧义；`/profile/*` 用户级页面归属不明，**避免用**，优先 Account API Tokens（`/b093…/api-tokens`）。

@@ -1,6 +1,6 @@
 // 本地验证：reviewers.yaml 解析后 enabled 状态
 const fs = require('fs');
-const path = 'D:/TITAN_ARCHAEOLOGY/orchestrator/reviewers.yaml';
+const path = require('path').join(__dirname, 'reviewers.yaml');
 const text = fs.readFileSync(path, 'utf8').replace(/\r\n/g, '\n').replace(/^\uFEFF/, '');
 const lines = text.split('\n');
 const reviewers = [];

@@ -54,7 +54,7 @@ SUMMARY: 42 tests -> 41 passed, 1 failed, 0 skipped
 
 ```powershell
 # 一步到位：本仓全量回归（35+ 测试文件）
-node orchestrator/run-tests.mjs --cwd D:\TITAN_ARCHAEOLOGY --framework node
+node orchestrator/run-tests.mjs --cwd <workspace> --framework node
 ```
 
 ## 三条硬约束（别绕过）

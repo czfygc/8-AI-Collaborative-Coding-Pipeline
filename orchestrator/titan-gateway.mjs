@@ -8,12 +8,13 @@ import { createServer } from 'node:http';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { scanInput, summarizeFindings } from './lib/input-integrity.mjs';
 import { createLedger, newRunId, EVENT_TYPES } from './lib/run-events.mjs';
 import { buildIntent, writeIntentFile } from './lib/intent.mjs';
 
-const TITAN_ROOT = resolvePath(process.env.TITAN_ROOT || 'D:\\TITAN_ARCHAEOLOGY');
+const TITAN_ROOT = resolvePath(process.env.TITAN_ROOT || resolvePath(fileURLToPath(new URL('..', import.meta.url))));
 const ORCHESTRATE = join(TITAN_ROOT, 'orchestrator', 'orchestrate.mjs');
 const PORT = Number(process.env.TITAN_GATEWAY_PORT || 5301);
 const ALLOWED_RAW = process.env.TITAN_ALLOWED_USER_IDS || '';

@@ -6,9 +6,10 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, mkdirSync, readdirSync, unlinkSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { gate } from './lib/write-gate.mjs';
 
-const TITAN_ROOT = resolve(process.env.TITAN_ROOT || 'D:\\TITAN_ARCHAEOLOGY');
+const TITAN_ROOT = resolve(process.env.TITAN_ROOT || resolve(fileURLToPath(new URL('..', import.meta.url))));
 const WHITELIST_DIR = join(TITAN_ROOT, 'codegen');
 const MAX_FILE_BYTES = 50 * 1024;
 const PROMPT_MAX_LEN = 1500;

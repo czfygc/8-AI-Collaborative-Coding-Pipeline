@@ -80,7 +80,7 @@ node -e "fetch('http://127.0.0.1:3001/v1/chat/completions',{method:'POST',header
 ## 3. 委派 prompt 骨架（照抄）
 
 ```
-You are implementing <T-xx> in the TITAN repo at D:\TITAN_ARCHAEOLOGY.
+You are implementing <T-xx> in this repo at <workspace>.
 CONTEXT       现状（读得懂即可）
 TASK          交付物，逐条编号
 HARD BOUNDARIES
@@ -103,7 +103,7 @@ DELIVER       结尾固定三行：VERDICT: PASS / FILES: ... / TESTS: ...
   ```powershell
   $env:OPENAI_API_KEY = (Get-Content "$env:USERPROFILE\.cline\data\settings\providers.json" -Raw | ConvertFrom-Json).providers.'openai-compatible'.settings.apiKey
   $p = Get-Content -Raw prompt.txt
-  & 'D:\TITAN_ARCHAEOLOGY\cline-local\node_modules\@cline\cli-windows-x64\bin\cline.exe' $p --json --auto-approve true -P openai-compatible -c 'D:\TITAN_ARCHAEOLOGY' --data-dir 'D:\TITAN_ARCHAEOLOGY\tmp\cline-<id>\data'
+  & '<workspace>\cline-local\node_modules\@cline\cli-windows-x64\bin\cline.exe' $p --json --auto-approve true -P openai-compatible -c '<workspace>' --data-dir '<workspace>\tmp\cline-<id>\data'
   ```
 
 ## 5. 模型分工（2026-10-21 整顿后）

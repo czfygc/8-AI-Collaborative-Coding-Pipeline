@@ -6,7 +6,7 @@
 // L200-245 超时/响应/锁/附件/快照/架构师常量+START_BAT+REVIEWERS_YAML。
 // __dirname 语义 = orchestrator/（lib/ 下两次 dirname，与原入口取值一致）。
 import { existsSync, readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const __dirname = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -65,7 +65,7 @@ export const CDP_HOST = process.env.D_CDP_HOST || configFromFile.D_CDP_HOST || e
 // 强制项，但全套工具链（autopilot/bat/头less 调用）都依赖零配置默认运行——强制=回归。
 // 可移植性顺序：env > config.json > .env > 默认（默认是本部署的最后兜底，不是坏味道）。
 export const TITAN_ROOT = process.env.D_TITAN_ROOT || configFromFile.D_TITAN_ROOT || envFromFile.D_TITAN_ROOT
-  || 'D:\\TITAN_ARCHAEOLOGY';
+  || resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
 
 // P2-14: 统一超时配置（per-reviewer + artifact 大小）
@@ -115,6 +115,6 @@ export const RESPONSE_POLL_MAX = 200;                // waitForResponse 缺省�
 export const FILE_LOCK_POLL_MS = 10;                 // 文件锁轮询间隔（计数器/历史）
 export const FILE_LOCK_TIMEOUT_MS = 500;             // 文件锁获取超时
 export const FILE_LOCK_STALE_MS = 5000;              // 陈旧锁回收阈值（DELTA-023）
-export const START_BAT = process.env.START_BAT || configFromFile.START_BAT || envFromFile.START_BAT || 'D:\\TITAN_ARCHAEOLOGY\\启动CDP浏览器.bat';
+export const START_BAT = process.env.START_BAT || configFromFile.START_BAT || envFromFile.START_BAT || join(TITAN_ROOT, '启动 CDP 浏览器.bat');
 
 export const REVIEWERS_YAML = join(__dirname, 'reviewers.yaml');

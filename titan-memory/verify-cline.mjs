@@ -13,8 +13,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const PROJECT = 'D:/TITAN_ARCHAEOLOGY/.cline/mcp.json';
+const WORKSPACE = process.env.TITAN_WORKSPACE
+  || path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const PROJECT = path.join(WORKSPACE, '.cline/mcp.json');
 const GLOBAL = path.join(process.env.USERPROFILE, '.cline/data/settings/cline_mcp_settings.json');
 
 let fails = 0;
@@ -71,7 +74,7 @@ const b = globalCfg.mcpServers[name];
 ok('both files declare the same server name "titan"', Boolean(a) && Boolean(b));
 ok('both files point at the same entry', a?.command === b?.command && JSON.stringify(a?.args) === JSON.stringify(b?.args));
 ok('server not disabled', a?.disabled === false && b?.disabled === false);
-ok('TITAN_WORKSPACE pinned in env', a?.env?.TITAN_WORKSPACE === 'D:/TITAN_ARCHAEOLOGY', JSON.stringify(a?.env));
+ok('TITAN_WORKSPACE pinned in env', a?.env?.TITAN_WORKSPACE === WORKSPACE.replace(/\\/g, '/'), JSON.stringify(a?.env));
 
 // ---- 2. spawn exactly as Cline would ---------------------------------------
 const ws = a.env.TITAN_WORKSPACE;
@@ -139,7 +142,7 @@ try {
 		recall.isError !== true && /\d+ fact\(s\)/.test(recallText) && /10810|sing_box/.test(recallText),
 		JSON.stringify(recall).slice(0, 300));
 	process.stdout.write(`  -> ${recallText.split('\n')[0].slice(0, 120)}\n`);
-	ok('workspace resolved to D:\\TITAN_ARCHAEOLOGY (forward-slash env normalised)',
+	ok('workspace resolved to the pinned workspace (forward-slash env normalised)',
 		/no active facts/.test(recallText) === false);
 
 	const search = await request('tools/call', { name: 'memory_search', arguments: { query: '10810', limit: 2 } });

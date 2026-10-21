@@ -6,10 +6,12 @@
 
 ## 1. What this is
 
-This is a pipeline of **8 collaborating AIs**:
+This is a **multi-AI collaboration pipeline**:
 
 - **Web-AI reviewers** (Gemini, DeepSeek, Qwen, plus ChatGPT as final arbiter) — they produce solutions, break work into tasks, and review results
-- **4 local coding clients** (deepseek Harness, OpenCode, Cline, Kilo Code) — they write the actual code
+- **Local coding clients** (deepseek Harness, OpenCode, Cline, Kilo Code) — they write the actual code
+
+> The exact seat count is a deployment choice, not a fixed promise.
 
 You only need to **describe what you want in plain language**; the pipeline handles decomposition, design, coding, and review.
 

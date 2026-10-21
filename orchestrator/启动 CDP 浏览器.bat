@@ -7,7 +7,7 @@ if not defined CHROME_EXE set "CHROME_EXE=%LOCALAPPDATA%\ms-playwright\chromium-
 start "" "%CHROME_EXE%" ^
   --remote-debugging-port=9222 ^
   --remote-debugging-address=127.0.0.1 ^
-  --user-data-dir=D:\TITAN_ARCHAEOLOGY\chrome-cdp-profile ^
+  --user-data-dir=%~dp0..\chrome-cdp-profile ^
   --no-first-run ^
   --no-default-browser-check
 echo CDP browser launching on 127.0.0.1:9222 (profile: chrome-cdp-profile)

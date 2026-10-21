@@ -45,7 +45,7 @@ Harness 继续用它自己的八个工具（含 `memory_edit` / `memory_forget` 
    `zstdDecompressSync` 和流式解压**都只吃第一帧**（10MB 文件解出 199 字节）。
    因此按 magic `28 B5 2F FD` 定位帧起点逐帧解码，解不出或不以 JSON 开头的丢弃。
 2. **`workspacePath` 必须显式给**。MCP server 的 cwd 由客户端决定，而 fact 表按工作区精确分域 —— cwd 错一位就召回 0 条。
-   所以四份配置里都写死了 `TITAN_WORKSPACE=D:/TITAN_ARCHAEOLOGY`。
+   所以四份配置里都写死了 `TITAN_WORKSPACE=<your-workspace>`。
 3. **DSH 可能不认我写的 fact**。写盘前 `assertShape()` 逐字段校验 DSH 的 `FactSchema`
    （id/workspacePath/kind/text/tags/sessionId/seq/createdAt/updatedAt/state），
    任何一个不合法就**拒绝整次写入** —— 一行坏数据会让 Harness 的插件打不开整个 domain。
@@ -67,7 +67,7 @@ Harness 继续用它自己的八个工具（含 `memory_edit` / `memory_forget` 
 ## 验证
 
 ```powershell
-cd D:\TITAN_ARCHAEOLOGY
+cd <workspace>
 node titan-memory\test.mjs          # 46/46：协议协商、往返、DSH schema、core memory、错误路径、清理不留痕
 node titan-memory\verify-cline.mjs  # 14/14：Cline 接线回归
 node titan-memory\cli.mjs recall '{"query":"10810","limit":5}'

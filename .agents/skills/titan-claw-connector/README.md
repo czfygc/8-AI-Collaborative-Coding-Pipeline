@@ -19,12 +19,12 @@ same chat.
 
 ## Prerequisites
 
-1. TITAN Archaeology workspace checked out at `D:\TITAN_ARCHAEOLOGY` (or set
+1. TITAN Archaeology workspace checked out at `<workspace>` (or set
    `TITAN_ROOT` env var).
 2. TITAN gateway running:
 
    ```powershell
-   # In one terminal, inside D:\TITAN_ARCHAEOLOGY
+   # In one terminal, inside <workspace>
    set TITAN_ALLOWED_USER_IDS=<your_telegram_user_id>
    node orchestrator/titan-gateway.mjs
    ```

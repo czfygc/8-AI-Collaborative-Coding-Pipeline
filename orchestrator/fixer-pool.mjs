@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TITAN = process.env.D_TITAN_ROOT || join(__dirname, '..');
-// S-08：REPO 硬编码 'D:/TITAN_ARCHAEOLOGY' 删——统一走 TITAN（env 或 __dirname 推导），
+// S-08：REPO 硬编码的本机路径删——统一走 TITAN（env 或 __dirname 推导），
 // 克隆/指纹/隔离判定/fetch 全部同源，不再有第二条盘路径事实。
 const REPO = TITAN;
 const SB = join(tmpdir(), 'titan-phaseB-probes');

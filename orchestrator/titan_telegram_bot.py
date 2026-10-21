@@ -42,7 +42,7 @@ TITAN_ALLOWED_USER_IDS = set(
     s.strip() for s in os.environ.get("TITAN_ALLOWED_USER_IDS", "").split(",") if s.strip()
 )
 TITAN_GATEWAY_URL = os.environ.get("TITAN_GATEWAY_URL", "http://127.0.0.1:5301/task")
-TITAN_ROOT = os.environ.get("TITAN_ROOT", "D:\\TITAN_ARCHAEOLOGY")
+TITAN_ROOT = os.environ.get("TITAN_ROOT") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POLL_INTERVAL = 3  # 秒
 SEND_RETRIES = 3
 DEDUP_WINDOW = 30  # 秒：同 chat 同文案在此窗口内只回一次
@@ -348,7 +348,7 @@ def resolve_file_path(hint):
     if os.path.isfile(cand):
         if cand.startswith(TITAN_ROOT):
             return cand, None
-        return None, f"文件必须在 TITAN_ARCHAEOLOGY 工作区内：{h}"
+        return None, f"文件必须在 TITAN 工作区内：{h}"
     base = os.path.basename(h.replace("\\", "/"))
     hits = []
     for root, dirs, files in os.walk(TITAN_ROOT):

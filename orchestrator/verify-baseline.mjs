@@ -5,7 +5,7 @@
 // 只读，不修改任何文件
 
 import { readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { extractVerdictLines } from './lib/verdict-parse.mjs';
@@ -54,7 +54,7 @@ function evaluate(c) {
 }
 
 function verifyBaseline(dispatchId) {
-  const TITAN_ROOT = process.env.D_TITAN_ROOT || 'D:\\TITAN_ARCHAEOLOGY';
+  const TITAN_ROOT = process.env.D_TITAN_ROOT || resolve(fileURLToPath(new URL('..', import.meta.url)));
   const outDir = join(TITAN_ROOT, 'reviews', dispatchId);
   const layerB = join(outDir, 'layer-b');
   const rawDir = join(outDir, 'layer-a', 'raw');

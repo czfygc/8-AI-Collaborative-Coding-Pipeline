@@ -33,7 +33,7 @@ provenance: original
 
 ### S2 本地优先（10 分钟）
 ```powershell
-& D:\TITAN_ARCHAEOLOGY\bin\rg.exe -n "关键词" --glob '!node_modules/**' .   # 仓库内是否已有
+& <workspace>\bin\rg.exe -n "关键词" --glob '!node_modules/**' .   # 仓库内是否已有
 git log --oneline -20 -- <路径>                                             # 是否做过
 ```
 - 命中已有实现/记录 → **直接复用**，不重新研究。

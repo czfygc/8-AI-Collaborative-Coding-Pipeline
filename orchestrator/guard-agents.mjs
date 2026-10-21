@@ -2,8 +2,10 @@
 import { createHash } from 'crypto';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
+import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 
-const REPO_ROOT = 'D:\\TITAN_ARCHAEOLOGY';
+const REPO_ROOT = process.env.D_TITAN_ROOT || resolve(fileURLToPath(new URL('..', import.meta.url)));
 const WATCH_FILES = [
   'AGENTS.md',
   'opencode.json',

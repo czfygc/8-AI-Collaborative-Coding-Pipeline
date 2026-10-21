@@ -1,6 +1,6 @@
 // orchestrator/publish-sync.mjs — T-125：发布树同步账本与一键同步
 //
-// 问题（T-125 用户提问）：本地仓 D:\TITAN_ARCHAEOLOGY 一直在更新，发布树
+// 问题（T-125 用户提问）：本地仓（路径由脚本位置推导）一直在更新，发布树
 // （桌面固定目录，路径由账本记录，见 PUBLISH_SYNC.json）只在需要时手工同步；过一段时间就没人说得清
 // 『从哪开始同步』『哪些还没同步』——原先每次都要重新梳理（查发布树 git 历史、
 // 逐文件比对、再想该发哪些）。
@@ -136,10 +136,11 @@ const SECRET_PATTERNS = [
   [/\bAKIA[0-9A-Z]{16}\b/, 'AWS access key'],
   [/\bxox[baprs]-[0-9A-Za-z-]{10,}/, 'Slack token'],
   [/\beyJ[0-9A-Za-z_-]{8,}\.[0-9A-Za-z_-]{8,}\.[0-9A-Za-z_-]{8,}/, 'JWT'],
-  [/D:[\\/]\u6211\u7684\u6587\u6863/, 'internal personal path (desktop)'],
-  [/C:[\\/]Users[\\/][^\\/]+/i, 'machine user path (use %USERPROFILE% instead)']
+  [/D:[\\/]{1,2}我的文档/, 'internal personal path (desktop)'],
+  [/C:[\\/]{1,2}Users[\\/]{1,2}[^\\/]+/i, 'machine user path (use %USERPROFILE% instead)'],
+  // 本机工作区路径同样是"机器路径"（公开仓应让用户用自己的工作区）——字面量用拼接构造，避免本工具源码命中自己的扫描
+  [new RegExp('[A-Z]:[\\\\/]{1,2}' + ('TITAN_' + 'ARCHAEOLOGY'), 'i'), 'local workspace path (derive from script location or env)'],
 ];
-
 // ------------------------------------------------------------------ 基础工具
 
 function sha256File(abs) {
@@ -504,7 +505,7 @@ function cmdApply(opts) {
     syncedAt: new Date().toISOString(),
     publishedFiles: fp.fileCount,
     publishedFingerprint: fp.sha256,
-    note: '本仓由 D:/TITAN_ARCHAEOLOGY 的发布树同步生成；来源提交见 sourceCommit；禁推清单见 publish-sync.mjs NEVER_PUBLISH。'
+    note: '本仓由本地工作区的发布树同步生成；来源提交见 sourceCommit；禁推清单见 publish-sync.mjs NEVER_PUBLISH。'
   };
   writeFileSync(join(pubDir, MANIFEST_NAME), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
   console.log('  [标记] ' + MANIFEST_NAME);

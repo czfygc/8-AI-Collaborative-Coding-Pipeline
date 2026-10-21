@@ -6,14 +6,15 @@
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
-import { basename, join, dirname } from 'node:path';
+import { basename, join, dirname, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { triageFindings } from './lib/scan-triage.mjs';
 
 // P-19 复位：执行器修复轮（R2 DELTA-014）在 ESM 里用了 __dirname → import 即炸。
 // scan-flow 是纯库模块、由 CLI 入口调用且入口已做四级 TITAN_ROOT 解析——此处保留
 // 简单 env 回退即可（TITAN_ROOT 漂移属设计注记，不值得为它破运行时）。
-const TITAN_ROOT = process.env.D_TITAN_ROOT || 'D:\\TITAN_ARCHAEOLOGY';
+const TITAN_ROOT = process.env.D_TITAN_ROOT || resolve(fileURLToPath(new URL('..', import.meta.url)));
 const CLI_TIMEOUT_MS = Number(process.env.TITAN_SCAN_TIMEOUT_MS) > 0 ? Number(process.env.TITAN_SCAN_TIMEOUT_MS) : 300000;
 const PROMPT_CAP = 24000;
 
@@ -202,9 +203,9 @@ function generateDeltaMd(fileName, findings) {
 
 function resolveCommand(name) {
   const table = {
-    opencode: [process.env.TITAN_OPENCODE_BIN, 'D:\\TITAN_ARCHAEOLOGY\\test-projects\\landmine-001\\node_modules\\opencode-windows-x64\\bin\\opencode.exe', 'opencode'],
-    cline: [process.env.TITAN_CLINE_BIN, 'D:\\TITAN_ARCHAEOLOGY\\cline-local\\node_modules\\@cline\\cli-windows-x64\\bin\\cline.exe', 'cline'],
-    kilo: [process.env.TITAN_KILO_BIN, 'C:\\Users\\Administrator\\.vscode\\extensions\\kilocode.kilo-code-7.8.15-win32-x64\\bin\\kilo.exe', 'kilo'],
+    opencode: [process.env.TITAN_OPENCODE_BIN, join(TITAN_ROOT, 'test-projects', 'landmine-001', 'node_modules', 'opencode-windows-x64', 'bin', 'opencode.exe'), 'opencode'],
+    cline: [process.env.TITAN_CLINE_BIN, join(TITAN_ROOT, 'cline-local', 'node_modules', '@cline', 'cli-windows-x64', 'bin', 'cline.exe'), 'cline'],
+    kilo: [process.env.TITAN_KILO_BIN, 'kilo'],
   };
   for (const c of (table[name] || [name])) {
     if (!c) continue;
@@ -215,7 +216,7 @@ function resolveCommand(name) {
   // （scan 实录 spawn: spawn kilo ENOENT，版本化目录 7.8.3 → 实装 7.8.15）。
   // 兜底：扫描扩展目录按语义版本取最新可用档（与 titan-execute.mjs 同款逻辑）。
   if (name === 'kilo') {
-    const extRoot = 'C:\\Users\\Administrator\\.vscode\\extensions';
+    const extRoot = join(process.env.USERPROFILE || '', '.vscode', 'extensions');
     let best = null, bestV = [-1, -1, -1];
     try {
       for (const d of readdirSync(extRoot)) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// D:\TITAN_ARCHAEOLOGY\orchestrator\orchestrate.mjs
+// orchestrator/orchestrate.mjs（仓内路径由 __dirname 推导）
 // TITAN Multi-Review Dispatch — Orchestrator (STEP A + B + upload)
 //
 // 接口：
